@@ -1,0 +1,318 @@
+---
+title: "Week3_Exercises"
+author: "Priya Shaji"
+date: "9/10/2020"
+output: html_document
+---
+
+## Forecasting Principles and Practice
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = "T", results = 'hide'}
+packages <- c("tidyverse", "fpp2", "forecast", "kableExtra", "broom", "ggplot2", "caret", "e1071", "knitr", "GGally", "VIM", "mlbench", "car", "corrplot", "mice", "seasonal", "fma", "latex2exp","gridExtra")
+pacman::p_load(char = packages)
+```
+
+
+#### 3.1 
+
+<strong>For the following series, find an appropriate Box-Cox transformation in order to stabilise the variance.
+
+- `usnetelec`
+- `usgdp`
+- `mcopper`
+- `enplanements` </strong>
+
+<strong> Answer </strong>
+
+A good value of `λ` is one which makes the size of the seasonal variation about the same across the whole series, as that makes the forecasting model simpler. 
+
+Let's use `BoxCox.lambda` function to pick up the best lambda value for appropriate box cox transformation.
+
+BoxCox has a built in function to find a good lambda value to stabilize the variance.
+
+Step 1) Choose the best value of lambda via `BoxCox.lambda`
+
+Step 2) Apply Box Cox on the time series data,
+
+`usnetelec` : Annual US net electricity generation (billion kwh) for 1949-2003
+
+
+```{r}
+## wt - without transformation
+
+usnetelec_wt <- autoplot(usnetelec)
+usnetelec_transformed <- BoxCox.lambda(usnetelec)
+usn_BoxCoxgraph <-autoplot(BoxCox(usnetelec, usnetelec_transformed))
+grid.arrange( grobs = list(usnetelec_wt,usn_BoxCoxgraph))
+```
+
+<strong>Inference:</strong> In the above graph, there is not much seasonal variation in the data to be smoothed over, the values have been normalized by the Box-Cox transformation so that may help in prediction if other values are as small.
+
+`usgdp`: Quarterly US GDP. 1947:1 - 2006.1.
+
+
+```{r}
+
+## wt - without transformation
+
+usg_wt<- autoplot(usgdp)
+usgdp_transformed <- BoxCox.lambda(usgdp)
+usg_BoxCoxgraph<- autoplot(BoxCox(usgdp, usgdp_transformed))
+grid.arrange( grobs = list(usg_wt,usg_BoxCoxgraph))
+```
+
+
+<strong>Inference:</strong> In the above graph, which is similar to usnetelec, there is not much seasonal variation in the data to be smoothed over, also the values have been normalized by the Box-Cox transformation so that may help in prediction if other values are as small.
+
+
+
+`mcopper`: Monthly copper prices. Copper, grade A, electrolytic wire bars/cathodes,LME,cash (pounds/ton) Source: UNCTAD (http://stats.unctad.org/Handbook).
+
+
+```{r}
+
+## wt - without transformation
+
+mc_wt <- autoplot(mcopper)
+mcopper_transformed <- BoxCox.lambda(mcopper)
+mc_BoxCoxgraph <-autoplot(BoxCox(mcopper, mcopper_transformed))
+grid.arrange(mc_wt, mc_BoxCoxgraph)
+```
+
+
+<strong>Inference:</strong> In the above graph, there seems to be a shift in the mcopper dataset, in the Box-Cox transformation graph due to the spike in copper prices.
+
+
+
+`enplanements`: "Domestic Revenue Enplanements (millions): 1996-2000. SOURCE: Department of Transportation, Bureau of Transportation Statistics, Air Carrier Traffic Statistic Monthly.
+
+
+```{r}
+
+## wt - without transformation
+
+enp_wt<- autoplot(enplanements)
+enplanements_transformed <- BoxCox.lambda(enplanements)
+enp_BoxCoxgraph <- autoplot(BoxCox(enplanements, enplanements_transformed))
+grid.arrange( grobs = list(enp_wt,enp_BoxCoxgraph))
+```
+
+
+<strong>Inference:</strong> In the above graph, there is not much seasonal variance in the data to be smoothed, needed values have been normalized by box cox transformation.
+
+
+#### 3.2
+
+<strong>Why is a Box-Cox transformation unhelpful for the `cangas` data?</strong>
+
+<strong> Answer </strong>
+
+Let's explore cangas data:
+
+`Cangas` is a time series data. It is the monthly Canadian gas production, billions of cubic metres, January 1960 - February 2005
+
+
+
+
+```{r}
+
+## wt - without transformation
+
+cangas_transformed <- BoxCox.lambda(cangas)
+cangas_wt<- autoplot(cangas) 
+cangas_BoxCoxgraph<- autoplot(BoxCox(cangas, cangas_transformed))
+grid.arrange( grobs = list(cangas_wt,cangas_BoxCoxgraph))
+```
+
+
+
+<strong>Inference:</strong> 
+
+- As `BoxCox.lambda` picks the best value of lambda and after applying box cox on    the time series data, we were not able to stabilize the variance. 
+
+- As we can see the comparison of both autoplots, the box-cox transformation is      generating similar results to the original, in other words the transformation      does not provide stationarity to time series.
+
+- Probably as the variation in the cangas data set is not extreme enough for a B     box-Cox transformation to have any real effect. We saw this behaviour with         `usnetelec` and `usgdp` in the previous exercise, and even `enplanements` to a     certain extent.
+
+
+#### 3.3
+
+
+<strong>What Box-Cox transformation would you select for your retail data (from Exercise 3 in Section 2.10)?</strong>
+
+<strong> Answer</strong>
+
+
+Let's replicate our answer from Exercise 3 in Section 2.10:
+
+a) Read the data into R with the following script:
+
+```{r}
+retaildata <- readxl::read_excel("retail.xlsx", skip=1)
+#View(retaildata)
+```
+
+
+b) Select one of the time series as follows
+
+```{r}
+new_series <- ts(retaildata[,"A3349873A"],
+  frequency=12, start=c(1982,4))
+```
+
+
+c) Explore your chosen retail time series using the following functions: <strong>autoplot(), ggseasonplot(), ggsubseriesplot(), gglagplot(), ggAcf()</strong>. Can you spot any seasonality, cyclicity and trend? What do you learn about the series?
+
+
+```{r}
+autoplot(new_series)
+```
+
+```{r}
+
+## wt - without transformation
+
+retaildat_wt <- BoxCox.lambda(new_series)
+autoplot(BoxCox(new_series, retaildat_wt))
+```
+
+
+<strong>Inference:</strong> 
+
+- From the above transformed plot, we see that transformation has smoothed out the   data to a greater extent. The seasonal variations are stabilizied and time series   is almost stationary in the transformed plot. 
+
+- The seasonal peaks are more stationary than the original timeseries data plot.
+
+
+#### 3.8
+
+<strong>For your retail time series (from Exercise 3 in Section 2.10): </strong>
+
+<strong>a. Split the data into two parts using</strong>
+
+```{r}
+new_series.train <- window(new_series, end=c(2010,12))
+new_series.test <- window(new_series, start=2011)
+```
+
+
+<strong>b. Check that your data have been split appropriately by producing the following plot.</<strong>strong>
+
+```{r}
+autoplot(new_series) +
+  autolayer(new_series.train, series="Training") +
+  autolayer(new_series.test, series="Test")
+```
+
+Yes, split is correct in the above plot.
+
+Let's confirm it via `head()` and `tail()` function
+
+```{r}
+tail(new_series.train)
+```
+
+
+```{r}
+head(new_series.test)
+```
+
+
+<strong>c. Calculate forecasts using snaive applied to new_series.train.</strong>
+
+```{r}
+fc <- snaive(new_series.train)
+
+fc
+```
+
+<strong>d. Compare the accuracy of your forecasts against the actual values stored in `new_series.test`.</strong>
+
+```{r}
+accuracy(fc,new_series.test)
+```
+
+<strong>Inference: </strong>  
+
+
+- The seasonal naive forecasts accuracy in the test set is significantly lower than   the training set. 
+
+- Because the root mean square error for test set is 71.443 and the mean absolute error for test set is about 55.783. 
+
+- Now as we see that the time series data from Jan 2011 to Dec 2012 ranges between  269 and 400, and accuracy scores tells us that it is relatively large error. 
+
+- Also, the mean absolute percentage error for test set is  15.082%, by which we can infer that on average, forecast is 15.082% off.
+
+
+<strong>e. Check the residuals </strong>
+
+
+```{r}
+checkresiduals(fc)
+```
+
+
+<strong>Do the residuals appear to be uncorrelated and normally distributed?</strong>
+
+<strong>Inference on Ljung Box Test</strong>
+
+Hypotheses
+
+- The null hypothesis of the Box Ljung Test, H0, is that our model does not show lack of fit (or in simple terms—the model is just fine). The alternate hypothesis, Ha, is just that the    model does show a lack of fit.
+
+- In this case there is a  significant p-value in this test which rejects the null hypothesis that the time series isn’t autocorrelated
+
+<strong>Information on Residuals: </strong>  
+
+Residuals are useful in checking whether a model has adequately captured the information in the data. A good forecasting method will yield residuals with the following properties:
+
+- The residuals are uncorrelated. If there are correlations between residuals, then   there is information left in the residuals which should be used in computing       forecasts.
+
+- The residuals have zero mean. If the residuals have a mean other than zero, then   the forecasts are biased.
+
+Also, In addition to these essential properties, it is useful (but not necessary) for the residuals to also have the following two properties.
+
+- The residuals have constant variance.
+- The residuals are normally distributed.
+
+<strong>Inference on Plots: </strong> 
+
+- From the plots, it is apparent that the residuals are highly correlated. This      means that there is information left in the residuals that can be used to improve   the forecast. 
+
+- The mean of the residuals is not centered around zero, which means the forecast    is biased. Although the residuals appear to be normally distributed, the variance   is not constant. Therefore the prediction interval is not reliable.
+
+<strong>f. How sensitive are the accuracy measures to the training/test split?<strong>
+
+<strong>Answer</strong>
+
+To test how sensitive are the accuracy measures to the training/test split, let's
+perform forecasts multiple times, each time using different year to split the data, and compate the accuracies calculated below.
+
+```{r}
+sen <- function(split_year){
+  trainset <- window(new_series, end=c(split_year, 12))
+  testset <- window(new_series, start=split_year+1)
+  acc <- accuracy(snaive(trainset), testset)
+  return(acc)
+}
+
+splits <- c(2000:2011)
+
+accs <- data.frame()
+for (year in splits){
+  acc <- sen(year)
+  temp <- data.frame(t(acc[2,c(1:6)]))
+  accs <- rbind(accs, temp)
+}
+row.names(accs) <- splits
+accs
+```
+
+
+- From the above table, tt is apparent that the accuracy measures are very           sensitive to the split.
+
+- For example, if we see lowest MAPE value i.e. 2.1%, it came through data from Apr   1982 to Dec 2004 taken as train set and data from Jan 2005 to Dec 2006 taken as    test set. the accuracy is be very good which also means that on average the        forecast is just 2.1% off.
+
+- On the other hand, if we pick Dec 2011 to do the split, the accuracy will be very   bad, with a MAPE of 15.1% which also means that on average the forecast is 15.1%   off.
