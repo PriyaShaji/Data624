@@ -1,0 +1,239 @@
+---
+title: "Week4_Exercises"
+author: "Priya Shaji"
+date: "9/17/2020"
+output: html_document
+---
+
+
+## Forecasting Principles and Practice
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = "T", results = 'hide'}
+packages <- c("tidyverse", "fpp2", "forecast", "kableExtra", "broom", "ggplot2", "caret", "e1071", "knitr", "GGally", "VIM", "mlbench", "car", "corrplot", "mice", "seasonal", "fma", "latex2exp","gridExtra")
+pacman::p_load(char = packages)
+```
+
+
+#### 6.2
+
+<strong>The plastics data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+
+a. Plot the time series of sales of product A. Can you identify seasonal              fluctuations and/or a trend-cycle?
+b. Use a classical multiplicative decomposition to calculate the trend-cycle and      seasonal indices.
+c. Do the results support the graphical interpretation from part a?
+d. Compute and plot the seasonally adjusted data.
+e. Change one observation to be an outlier (e.g., add 500 to one observation), and    recompute the seasonally adjusted data. What is the effect of the outlier?
+f. Does it make any difference if the outlier is near the end rather than in the      middle of the time series?</strong>
+
+<strong> Answer </strong>
+
+<strong>a. Plot the time series of sales of product A. Can you identify seasonal fluctuations and/or a trend-cycle?</strong>
+
+Let's use autoplot to see the fluctuations in trend cycle of sales of product A
+
+```{r}
+autoplot(plastics) +
+  ggtitle("Product `A` sales") +
+  xlab("Year") +
+  ylab("Sales (in thousands)")
+```
+
+
+The plot show that the data is highly seasonal and with a consistent positive trend. It also appears that the height of the seasonal trends appear to increase with time.
+
+
+Now let's use `ggseasonplot()` to analyze seasonal components of `plastics` data
+
+```{r}
+ggseasonplot(plastics)
+```
+
+
+The plastics data has has an increasing trend, increases with time and a seasonal component where sales are higher in the summer and lower in the winter.
+
+
+<strong>b. Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.</strong>
+
+<strong> Answer </strong>
+
+Let's use `decompose()` function to calculate the trend-cycle and seasonal indices
+
+
+```{r}
+plastics %>% decompose(type="multiplicative") %>%
+  autoplot()
+```
+
+
+- `decompose()` function would split the graphs into 3 components `remainder`,        `trend`, `seasonal` and `data graph`. These components can be added together to    reconstruct the data shown in the top panel.
+
+- Notice that the seasonal component changes slowly over time, so that any two       consecutive years have similar patterns, but years far apart may have different    seasonal patterns. The remainder component shown in the bottom panel is what is    left over when the seasonal and trend-cycle components have been subtracted from   the data.
+
+- Seasonally adjusted series contain the remainder component as well as the          trend-cycle. Therefore, they are not “smooth”, and “downturns” or “upturns” can    be misleading. If the purpose is to look for turning points in a series, and       interpret any changes in direction, then it is better to use the trend-cycle       component rather than the seasonally adjusted data.
+
+
+<strong>c. Do the results support the graphical interpretation from part a?</strong>
+
+<strong> Answer </strong>
+
+Yes, the results of decomposition of multiplicative time series support the features of the data being highly seasonal and with almost linearly increasing trend.
+
+<strong>d. Compute and plot the seasonally adjusted data.</strong>
+
+<strong> Answer </strong>
+
+Here we will use `seasadj()` function to seasonally adjust our classical multiplicative decomposition data
+
+```{r}
+plastics %>% decompose(type="multiplicative") -> fit
+autoplot(plastics, series = "Data") +
+  autolayer(seasadj(fit), series = "Seasonally Adjusted") +
+  ylab("Sales (thousands)") +
+  ggtitle("Plastic Product `A` Sales")
+```
+
+
+The blue line in the above graph, shows us the seasonally adjusted data, which depicts that plastic sales have an increasing sales with time(seasonally), with dips at few seasons.
+
+<strong>e. Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?</strong>
+
+
+<strong> Answer </strong>
+
+The outlier should simply create a jump wherever it is seen, especially in the case of seasonally adjusted data. However, let's see via our example:
+
+```{r}
+oplastics <- plastics
+oplastics[30] <- oplastics[30] + 500
+oplastics %>% decompose(type="multiplicative") -> ofit
+autoplot(oplastics, series = "Data") +
+  autolayer(trendcycle(ofit), series = "Trend") +
+  autolayer(seasadj(ofit), series = "Seasonally Adjusted")
+```
+
+
+- The effect of the outlier is a slight distortion in the trend’s straght line,      but it has changed somewhat(in this case) with a slight spike/jump in the          seasonally adjusted line or mostly absorbed into the remainder(for most of other   cases) component, as evident from the graph above. 
+
+- Therefore it is likely that the seasonal component has changed with a slight       spike where the outlier data is else rest hasn’t changed much because of the       outlier. 
+
+- This conclusion is confimed by the decomposition plot below as well.
+
+
+Let's confirm our conclusion by using decomposition of multiolicative time series.
+
+
+```{r}
+oplastics %>% decompose(type="multiplicative") %>%
+  autoplot()
+
+```
+
+
+
+Based on the graph above there is a slight jump in the trend line and data graph at the point of observation and almost no impact to the seasonality component.
+
+
+<strong>f. Does it make any difference if the outlier is near the end rather than in the middle of the time series? </strong>
+
+<strong> Answer </strong>
+
+In theory it shouldn’t make any difference except the outlier should simply create a jump wherever it is seen, especially in the case of seasonally adjusted data. however, let's confirm via our exapmle:
+
+
+- Outlier at Beginning
+
+```{r}
+
+#ob = outlier at beginning
+
+ob_plastics <- plastics
+ob_plastics[2] <- ob_plastics[2] + 500
+
+ob_plastics %>% decompose(type="multiplicative") -> ob_fit
+autoplot(ob_plastics, series = "Data") +
+  autolayer(trendcycle(ob_fit), series = "Trend") +
+  autolayer(seasadj(ob_fit), series = "Seasonally Adjusted")+
+  ggtitle("Outlier at Beginning")
+```
+
+
+- Outlier at End
+
+
+```{r}
+
+#ob = outlier at end
+
+oe_plastics <- plastics
+oe_plastics[57] <- oe_plastics[57] + 500
+
+oe_plastics %>% decompose(type="multiplicative") -> oe_fit
+autoplot(oe_plastics, series = "Data") +
+  autolayer(trendcycle(oe_fit), series = "Trend") +
+  autolayer(seasadj(oe_fit), series = "Seasonally Adjusted")+
+   ggtitle("Outlier at End")
+```
+
+As we see from two graphs above, adding outlier at the end or at the beginning,  creates a jump or spike at that point of data or observation.
+
+Let's confirm our conclusion by using decomposition of multiolicative time series.
+
+
+- Outlier at Beginning
+
+```{r}
+ob_plastics %>% decompose(type="multiplicative") %>%
+  autoplot()
+```
+
+
+Based on the graph there is a slight jump in the trend line towards at the beginning and almost no impact to the seasonality component.
+
+
+- Outlier at End
+
+
+```{r}
+oe_plastics %>% decompose(type="multiplicative") %>%
+  autoplot()
+```
+
+
+Based on the graph there is a slight jump in the trend line towards the end and almost no impact to the seasonality component. The remainder has not captured the outlier. This may be due to the drawback of the classical decomposition which does not include end-points.
+
+
+#### 6.3
+
+
+<strong>Recall your retail time series data (from Exercise 3 in Section 2.10). Decompose the series using X11. Does it reveal any outliers, or unusual features that you had not noticed previously?</strong>
+
+
+<strong> Answer</strong>
+
+- Another popular method for decomposing quarterly and monthly data is the X11      method which originated in the US Census Bureau and Statistics Canada.
+
+- X11 handles both additive and multiplicative decomposition. The process is        entirely automatic and tends to be highly robust to outliers and level shifts     in the time series.
+
+```{r}
+library(seasonal)
+```
+
+
+```{r}
+retaildata <- readxl::read_excel("retail.xlsx", skip = 1)
+retail <- ts(retaildata[, "A3349337W"], frequency = 12, start = c(1982, 4))
+x11_retail <- seas(retail, x11="")
+autoplot(x11_retail) +
+  ggtitle("X11 Decomposition of Retail Sales Data")
+```
+
+
+- There are some spikes in the remainder early on 1983 and around 2000. That         indicates the presense of some outliers.
+
+- It is also interesting to note that the magnitude of the seasonal data decreases   as the years go on, yet the trend continues upward. The reason maybe that          seasonal swing was a lot stronger prior to 1990, although it’s hard to even see    that in the regular plot of the data probably because `seasonally adjusted`        series contain the remainder component as well as the trend-cycle as explained     in exercise section 6.2(b). Therefore, they are not “smooth”, and “downturns” or   “upturns” can be misleading. 
+
+- And if the purpose is to look for turning points in a series, and interpret any    changes in direction, then it is better to use the trend-cycle component rather    than the seasonally adjusted data.
+
+
