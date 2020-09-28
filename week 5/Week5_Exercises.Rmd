@@ -1,0 +1,368 @@
+---
+title: "Week5_Exercises"
+author: "Priya Shaji"
+date: "9/24/2020"
+output: html_document
+--- 
+
+## Applied Predictive Modeling
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = "T", results = 'hide'}
+packages <- c("tidyverse", "forecast", "kableExtra", "broom", "ggplot2", "caret", "e1071", "knitr", "GGally", "VIM", "mlbench", "car", "corrplot", "mice", "seasonal", "fma", "latex2exp","gridExtra")
+pacman::p_load(char = packages)
+```
+
+#### 3.1
+
+<strong>The UC Irvine Machine Learning Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe.
+The data can be accessed via:</strong>
+
+
+<strong> Load the dataset `Glass`</strong>
+```{r}
+library(mlbench)
+data(Glass)
+str(Glass)
+```
+
+As we see above, dataframe `Glass` has 214 observations and 10 variables
+
+
+<strong>(a) Using visualizations, explore the predictor variables to understand their distributions as well as the relationships between predictors.</strong>
+
+<strong>Answer</strong>
+
+Lets plot histogram to understand the distribution of the predictor variable, we will use histograms to obtain the frequencies of each of them for the following reasons:
+
+- The Histogram bins the data by frequency of values and plots the frequency bins     against the ordered values. 
+
+- The height of each bin represents the amount of the frequency. 
+
+
+```{r}
+long_glass <- Glass %>%
+  pivot_longer(-Type, names_to = "Predictor", values_to = "Value", values_drop_na = TRUE) %>%
+  mutate(Predictor = as.factor(Predictor))
+
+long_glass %>%
+  ggplot(aes(Value, color = Predictor, fill = Predictor)) +
+  geom_histogram(bins = 20) +
+  facet_wrap(~ Predictor, ncol = 3, scales = "free") +
+  scale_fill_brewer(palette = "Set1") +
+  scale_color_brewer(palette = "Set1") +
+  theme_light() +
+  theme(legend.position = "none") +
+  ggtitle("Distribution of Predictor Variables")
+```
+
+Glass is primarly made of Silica (Si), Sodium (Na) and lime/Calcium (Ca), Aluminium (Al). Therefore, they have relatively normal (symmetric) distributions. The remainder of the predictor variables appear to have non-normal (asymmetric) distributions. 
+
+Now we will examine how the predictors are related to each other. We will analyse that with a correlation plot.
+
+```{r}
+#ColorBrewer's 5 class spectral color palette
+col <- colorRampPalette(c("#d7191c", "#fdae61", "#ffffbf", "#abdda4", "#2b83ba"))
+
+Glass %>%
+  select(-Type) %>%
+  cor() %>%
+  round(., 2) %>%
+  corrplot(., method="color", col=col(200), type="upper", order="hclust", addCoef.col = "black", tl.col="black", tl.srt=45, diag=FALSE )
+```
+
+
+- As we see above, most of the predictors are negatively correlated, which makes      sense. They are measuring chemical concentrations on a percentage basis. As one     element increases we would expect a decrease in the others.
+
+- Most of the correlations are not very strong. The exception to this is the          correlation between calcium(Ca) and the refraction index(RI) is strongly            positively   correlated. 
+
+
+<strong>(b) Do there appear to be any outliers in the data? Are any predictors skewed?</strong>
+
+
+<strong>Answer</strong>
+
+To start with, let's analyze how the predictors are distributed by the type of glass by using a scatter plot:
+
+```{r message=FALSE, warning=FALSE}
+long_glass %>%
+  ggplot(aes(x = Type, y = Value, color = Predictor)) +
+  geom_jitter() +
+  ylim(0, 20) + 
+  scale_color_brewer(palette = "Set1") +
+  theme_light()
+```
+
+From the above plot, looks like glass type 1, 2 and 3 are very similar in chemical composition. There are a couple of observations that appear to be outliers. For example there are a couple of potassium (K) observations in the type 5 glass that are unusually high. There is a barium (Ba) observation in type 2 glass that apears to be an outlier along with some calcium (Ca) observations in type 2 glass.
+
+
+Now let's also analyse the outliers using box plot approach:
+
+- The Boxplot displays the data in quartiles. Inside the box lie the data filing      within the 25th and 75th percentile, also called the 1st and 3rd quartile. The      line inside the box represents the median, also known as the 50th percentile, also   called the 2nd quartile. 
+
+- Extending from the box are whiskers. Any values outside the whiskers are            considered outliers. Symmetric distributions have a box with equally sized          whiskers. Skewed distributions have the boxes with one long and one short whisker. 
+
+
+```{r}
+par(mfrow=c(3,3))
+for(var in names(Glass)[-10]){
+  boxplot(Glass[var], main=paste('Boxplot of', var), horizontal = T, col="steelblue")
+}
+```
+
+
+- The Boxplots show outliers in every variable except for Mg. The most extreme        outliers appear in the K and Ba variables. 
+
+- Seeing the box plots above, Magnesium is bimodal and left skewed. Iron, potasium    and barium are right skewed. The other predictors are somewhat normal.
+
+The skewness value can be calculated to confirm:
+
+```{r}
+Glass[-10] %>% apply(2, skewness) %>% sort(decreasing=T)
+```
+
+The above calculated values confirms our conclusions.
+
+<strong>(c) Are there any relevant transformations of one or more predictors that
+might improve the classification model?</strong>
+
+<strong>Answer</strong>
+
+A transformation method like Box-Cox transformation might improve the classification model’s preformance.
+
+```{r}
+trans <- preProcess(Glass[-10], method=c('BoxCox', 'center', 'scale'))
+transformed <- predict(trans, Glass[-10])
+
+par(mfrow=c(3,3))
+for(var in names(transformed)[-10]){
+  boxplot(transformed[var], main=paste('Boxplot of', var), horizontal = T, col="steelblue")
+}
+```
+
+
+```{r}
+transformed %>% apply(2, skewness) %>% sort(decreasing=T)
+```
+
+
+- The centering and scaling did the job of bringing the mean to 0 and standard        deviation to 1.
+
+- It appears that the Box-Cox transformation has improved the skewness of Ca, Al,     and Na. It was not effective in reducing the skewness for other predictors having   heavier skewness.
+
+- It may be beneficial to remove one of the highly correlated predictors to improve   stability of some linear models.
+
+
+#### 3.2
+
+<strong>The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes.</strong>
+
+The data can be loaded via:
+
+```{r}
+library(mlbench)
+data(Soybean)
+
+```
+
+```{r}
+#View(Soybean)
+```
+
+
+<strong>(a) Investigate the frequency distributions for the categorical predictors. Are any of the distributions degenerate in the ways discussed earlier in this chapter?</strong>
+
+<strong>Answer</strong>
+
+To answer the first part of the question, we will use `summary` function to analyze frequency distribution of predictors:
+
+
+```{r}
+summary(Soybean)
+
+```
+
+
+Following with second part of question: The variable with degenrate distributions is a variable with “zero-variance” or a handful of unique values that occur with very low frequencies "near-zero variance", that satisfies both following conditions:
+
+- The fraction of unique values over the sample size is low (say 10%).
+
+- The ratio of the frequency of the most prevalent value to the frequency of    the second most prevalent value is large (say around 20).
+
+- The nearZeroVar function can be used to find the degenrate variables:
+
+
+```{r}
+paste('The degenerate variables are:', paste(names(Soybean[,nearZeroVar(Soybean)]), collapse = ', '))
+```
+
+Let's explore the following variables: leaf.mild, mycelium, sclerotia
+
+```{r}
+summary(Soybean[19])
+```
+
+For the `leaf.mild` variable, the fraction of unique value over the sample size is 3/683=0.4% < 10%, and the ratio of the most prevalent value to the 2nd most prevalent value is 535/20=26.75 > 20 which confirms that `leaf.mild` is a degenerate variable.
+
+```{r}
+summary(Soybean[26])
+```
+
+
+For `mycelium` variable, the fraction of unique value over the sample size is 2/683=0.3% < 10%, and the ratio of the most prevalent value to the 2nd most prevalent value is 639/6=106.5 > 20 which confirms that `mycelium ` is a degenerate variable.
+
+
+
+```{r}
+summary(Soybean[28])
+```
+
+
+
+For the `sclerotia` variable, the fraction of unique value over the sample size is 2/683=0.3% < 10%, and the ratio of the most prevalent value to the 2nd most prevalent value is 625/20=31.25 > 20 which confirms that `sclerotia` is a degenerate variable.
+
+
+<strong>(b) Roughly 18 % of the data are missing. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?</strong>
+
+
+<strong>Answer</strong>
+
+The count of missing values in each variables are found below:
+
+```{r}
+nas <- Soybean %>% apply(2, is.na) %>% apply(2, sum, na.rm=T)
+nas <- sort(nas, decreasing=T)
+nas
+```
+
+hail, sever, seed.tmt, lodging are top 4 predictors with most no. of missing values.
+
+
+Let's plot our missing values in predictors:
+
+```{r}
+# A function that plots missingness
+# requires `reshape2`
+
+library(reshape2)
+library(ggplot2)
+
+ggplot_missing <- function(x){
+  
+  x %>% 
+    is.na %>%
+    melt %>%
+    ggplot(data = .,
+           aes(x = Var2,
+               y = Var1)) +
+    geom_raster(aes(fill = value)) +
+    scale_fill_grey(name = "",
+                    labels = c("Present","Missing")) +
+    theme_minimal() + 
+    theme(axis.text.x  = element_text(angle=45, vjust=0.5)) + 
+    labs(x = "Variables in Dataset",
+         y = "Rows or observations")
+}
+```
+
+```{r}
+ggplot_missing(Soybean[-1])
+```
+
+
+The above plot confirms our count of missing values in predictors.
+
+Since the data is distributed on the basis of classes therefore pattern of missing data is related to classes.
+
+Let's use `aggr()` to analyze pattern of missing data:
+
+- The `aggr` function in the `VIM` package plots and calculates the amount of         missing values in each variable. 
+
+```{r message=FALSE, warning=FALSE}
+library(VIM)
+aggr(Soybean[-1], prop = c(T, T), bars=T, numbers=T, sortVars=T)
+```
+
+
+- The non-graphical output of the function shows the exact proportion of missing values per variable. 
+
+
+- The visualizations produced by the aggr function in the VIM package show a bar chart with the proportion of missing data per variable as well as a grid with the proportion of missing     data for variable combinations. The bar chart shows several predictors variables have over 15% of their values missing.
+
+- The remainder of the grid shows missing data for variable combinations with each row highlighting the missing values for the group of variables detailed in the x-axis. 
+
+
+`dplyr` is useful for wrangling data into aggregate summaries and is used to find    the pattern of missing data related to the classes.
+
+
+```{r}
+library(dplyr)
+
+Soybean %>%
+  dplyr::mutate(Total = n()) %>% 
+  dplyr::filter(!complete.cases(.)) %>%
+  dplyr::group_by(Class) %>%
+  dplyr::mutate(Missing = n(), Proportion=Missing/Total) %>%
+  dplyr::select(Class, Missing, Proportion) %>%
+  unique()
+```
+
+
+- In the above process we checked if a pattern of missing data related to the classes exists is done by checking if some classes hold most of the incomplete cases. This is accomplished by   filtering, grouping, and mutating the data with dplyr. 
+
+- The majority of the missing values are in the phytophthora-rot class which has nearly 10% incomplete cases. The are only four more, out of the eighteen other, variables with incomplete   cases. 
+
+- The pattern of missing data is related to the classes. Mostly the phytophthora-rot class however since the other four variables only have between 1% and 2% incomplete cases.
+
+<strong>(c) Develop a strategy for handling missing data, either by eliminating predictors or imputation.</strong>
+
+
+<strong>Answer</strong>
+
+Multiple imputation and KNN are widely used, and multiple imputation being simpler is generally preferred.
+
+<strong>Method 1</strong>
+
+The `mice()` function in the `mice` package conducts Multivariate Imputation by Chained Equations (MICE) on multivariate datasets with missing values. The function has over imputation 20 methods that can be applied to the data. 
+
+The one used with these data is the `predictive mean matching(pmm)` method which is currently the most popular in online forums. After the imputations are made, a complete dataset is created using the complete() function. 
+
+The `aggr` function from the `VIM` package used in the previous example (plots and calculates the amount of missing values in each variable) is then reran for comparison.
+
+
+```{r}
+library(mice)
+MICE <- mice(Soybean, method="pmm", printFlag=F, seed=624)
+aggr(complete(MICE), prop = c(T, T), bars=T, numbers=T, sortVars=T)
+```
+
+
+
+
+
+<strong>Method 2</strong>
+
+In this method, k neighbors are chosen based on some distance measure and their average is used as an imputation estimate. The method requires the selection of the number of nearest neighbors, and a distance metric. KNN can predict both discrete attributes (the most frequent value among the k nearest neighbors) and continuous attributes (the mean among the k nearest neighbors)
+
+`knnImputation` is a function that fills in all NA values using the k Nearest Neighbours of each case with NA values. By default it uses the values of the neighbours and obtains an weighted (by the distance to the case) average of their values to fill in the unknows.
+
+
+```{r message=FALSE, warning=FALSE}
+library(DMwR)
+knnOutput <- knnImputation(Soybean)
+```
+
+
+```{r, layout="l-body-outset"}
+library(rmarkdown)
+paged_table(knnOutput)
+```
+
+
+
+```{r}
+ggplot_missing(knnOutput)
+```
+
+One of the obvious drawbacks of the KNN algorithm is that it becomes time-consuming when analyzing large datasets because it searches for similar instances through the entire dataset. Furthermore, the accuracy of KNN can be severely degraded with high-dimensional data because there is little difference between the nearest and farthest neighbor.
