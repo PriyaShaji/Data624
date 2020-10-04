@@ -1,0 +1,675 @@
+---
+title: "Week6_Exercises"
+author: "Priya Shaji"
+date: "9/28/2020"
+output: html_document
+---
+
+## Forecasting Principles and Practice
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = "T", results = 'hide'}
+library(knitr)
+library(fma)
+library(tidyverse)
+library(gridExtra)
+library(openxlsx)
+```
+
+#### 7.1
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 6/Screen Shot 2020-09-30 at 3.51.10 PM.png")
+```
+
+<strong>Answer</strong>
+
+<strong>a.</strong> Let's use `ses()` function in R to generate forecasts of next 4 months:
+
+First let's explore `pigs series`
+
+```{r}
+str(pigs)
+findfrequency(pigs)
+```
+
+
+```{r}
+tsdisplay(pigs)
+
+```
+
+
+As we see from the data description, `pigs` has 188 obs. depiciting no. of pigs slaughtered in Victoria each month and frequency of the dataset is 3.
+
+Also from the time series plots, we see no particular trend or seasonality.
+
+Before applying `ses()` to our time series data, let's plot the graph using `autoplot`:
+
+```{r}
+autoplot(pigs)
+```
+
+
+As we see from the above graph, there is no trend and no seasonality to be detected from the graph. Therefore, we will use `simple exponential smoothing` to forecast future values using a weighted average of all previous value sin the series.
+
+
+Now, let's use `ses()` to generate smoothing exponential and fit the model with h=4(months):
+
+
+```{r}
+pigs_ses <- ses(pigs, h=4)
+```
+
+
+```{r}
+pigs_ses$model
+```
+
+
+We see that alpha = 0.2971  (smoothing constant) which is closer to 0, which demonstrates that it's slow learning because the algorithm gives historical data more weight; therefore, past changes in the data will have a bigger impact on forecasted values. 
+
+
+Let's plot the ses() model:
+
+```{r}
+autoplot(pigs_ses)
+```
+
+By ses() generated alpha:
+
+Optimal values:
+
+alpha =  0.2971
+l = 77260.0561 
+
+
+Let's analyze predictions for the next 4 months as mentioned in question:
+
+
+```{r}
+
+predict(pigs_ses)
+```
+
+
+<strong>b. </strong>
+
+1. Calculating prediction interval using `ses()`
+
+```{r}
+pigs_ses.prediction.interval = list(pigs_ses$lower[1,2], pigs_ses$upper[1,2])
+unlist(pigs_ses.prediction.interval)
+```
+
+
+2. Calculating prediction interval using formula given in question:
+
+First, let's calculate standard deviation:
+
+```{r}
+sd = sd(pigs_ses$residuals)
+cat("Standard deviation of Residuals =", sd)
+```
+
+
+```{r}
+lower = pigs_ses$mean[1] - 1.96 * sd
+upper = pigs_ses$mean[1] + 1.96 * sd
+calc.prediction.interval = list(lower, upper)
+unlist(calc.prediction.interval)
+```
+
+Lower limit of prediction interval is more for the one derived via formula and upper limit of prediction interval is higher than R's lower limit.
+
+
+#### 7.5
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 6/Screen Shot 2020-10-01 at 3.38.35 PM.png")
+```
+
+
+<strong>Answer</strong>
+
+
+<strong>a.</strong>
+
+Plot the `books` series using `tsdisplay()`
+
+```{r}
+autoplot(books)
+```
+
+
+As we see from the graph above paperback and hardcover has an increasing trend in their sales accompanied by dips which also confirms seasonality in the graph.
+
+Let's explore the dataset `books`
+
+```{r}
+summary(books)
+```
+
+As we see above, mon sales of paperback is 111 compared to 128 sales figure of hardcover.
+
+and maximum sales of paperback is 247 compared to 283 sales figure of hardcover.
+
+which shows that hardcover books sales are slightly more compared to paperback.
+
+
+<strong>b. </strong> 
+
+Let's split papercover and hardcover in the dataframe into two separate time series:
+
+
+```{r}
+df = data.frame(books)
+
+pc <- df$Paperback
+
+hc <- df$Hardcover
+
+```
+
+
+<strong> Paperback </strong>
+
+Now, let's use `ses()` to generate smoothing exponential and fit the model:
+
+
+```{r}
+pc_ses <- ses(pc, h = 4)
+```
+
+
+Now let's explore model
+
+
+```{r}
+pc_ses$model
+```
+
+
+We see that alpha =0.1685 (smoothing constant) which is closer to 0, which demonstrates that it's slow learning because the algorithm gives historical data more weight; therefore, past changes in the data will have a bigger impact on forecasted values. 
+
+
+Let's plot the ses() model:
+
+```{r}
+autoplot(pc_ses)
+```
+
+
+Let's analyze predictions for the next 4 months as mentioned in question:
+
+
+```{r}
+
+predict(pc_ses)
+```
+
+
+The results above are forecasted sales value  for paerback for next four days.
+
+
+<strong> Hardcover </strong>
+
+
+Now, let's use `ses()` to generate smoothing exponential and fit the model:
+
+
+```{r}
+hc_ses <- ses(hc, h = 4)
+```
+
+
+Now let's explore model
+
+
+```{r}
+hc_ses$model
+```
+
+
+We see that alpha =0.3283  (smoothing constant) which is closer to 0, which demonstrates that it's slow learning because the algorithm gives historical data more weight; therefore, past changes in the data will have a bigger impact on forecasted values. 
+
+
+Let's plot the ses() model:
+
+```{r}
+autoplot(hc_ses)
+```
+
+
+Let's analyze predictions for the next 4 months as mentioned in question:
+
+
+```{r}
+
+predict(hc_ses)
+```
+
+
+The results above are forecasted sales value for hardcover for next four days.
+
+
+<strong>c.</strong>
+
+Now, let's calculate RMSE values for each:
+
+```{r}
+pc.ses.acc = accuracy(pc_ses)
+pc.ses.acc
+```
+
+
+```{r}
+hc.ses.acc = accuracy(hc_ses)
+hc.ses.acc
+```
+
+
+Therefore, RMSE value of accuracy for paperback(33.63769) is more than hardcover(31.93101)
+
+#### 7.6
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 6/Screen Shot 2020-10-01 at 4.28.23 PM.png")
+```
+
+
+<strong>Answer</strong>
+
+<strong>a.</strong> 
+
+
+Holt’s Method makes predictions for data with a trend using two smoothing parameters, 
+α and β, which correspond to the level and trend components, respectively. For Holt’s method, the prediction will be a line of some non-zero slope that extends from the time step after the last collected data point onwards.
+
+Let's apply Holt's linear method to paperback and hardcover each:
+
+<strong> Paperback </strong>
+
+```{r}
+pc_holt = holt(pc, h=4)
+pc_holt$model
+#pc_holt.acc = accuracy(pc_holt)
+#pc_holt.acc
+```
+
+
+We see that alpha =1e-04  (smoothing constant) which is very close to 0, which demonstrates that it's slow learning because the algorithm gives historical data more weight; therefore, past changes in the data will have a bigger impact on forecasted values. 
+
+
+Displaying the forecasted sales values of paperback using `holt()` method
+
+```{r}
+predict(pc_holt)
+```
+
+
+<strong> Hardcover </strong>
+
+```{r}
+hc_holt = holt(hc, h=4)
+
+hc_holt$model
+#hc_holt.acc = accuracy(hc_holt)
+#hc_holt.acc
+```
+
+
+We see that alpha =1e-04  (smoothing constant) which is very close to 0, which demonstrates that it's slow learning because the algorithm gives historical data more weight; therefore, past changes in the data will have a bigger impact on forecasted values. 
+
+
+Displaying the forecasted sales values of paperback using `holt()` method
+
+```{r}
+predict(hc_holt)
+```
+
+<strong>b.</strong>
+
+Computing RMSE values  for paperback and handcover:
+
+<strong>Paperback</strong>
+
+```{r}
+pc_holt.acc = accuracy(pc_holt)
+pc_holt.acc
+```
+
+<strong>Hardcover</strong>
+
+
+```{r}
+hc_holt.acc = accuracy(hc_holt)
+hc_holt.acc
+```
+
+
+Tabulating the parameters of `holt()` and `ses()`:
+
+```{r}
+ses.rmse = list(pc.ses.acc[2], hc.ses.acc[2])
+holt.rmse = list(pc_holt.acc[2], hc_holt.acc[2])
+rmse = data.frame(Paperback=numeric(2), Hardcover=numeric(2))
+rownames(rmse) = c("SES", "Holt")
+rmse[,1] = unlist(ses.rmse)
+rmse[,2] = unlist(holt.rmse)
+
+# Compare RMSE for both series using both methods:
+kable(rmse, caption = " RMSE for Books using SES and Holt:")
+```
+
+
+As we see from above tabulation:
+
+RMSE values for Paperback and Hardcover is low in Holt's method.
+
+
+<strong>c.</strong>
+
+```{r}
+f1 = autoplot(pc_ses) +
+    ggtitle("SES Forecasts") +
+    xlab("Days") +
+    ylab("Books") +
+    autolayer(fitted(pc_ses), series="SES Paperback") +
+    autolayer(fitted(hc_ses), series="SES Hardcover") + coord_fixed(ratio=1/4)
+
+
+f2 = autoplot(pc_holt) +
+    ggtitle("Holt Forecasts") +
+    xlab("Days") +
+    ylab("Books") +
+    autolayer(fitted(pc_holt), series="Holt Paperback") +
+    autolayer(fitted(hc_holt), series="Holt Hardcover") + coord_fixed(ratio=2/8)
+
+grid.arrange(arrangeGrob(f1, f2, nrow=1, widths=c(1,1)))
+```
+
+
+Since as we see from the RMSE values, holt() method gave lowest values compared to ses(), holt() method forecasting seems to perform marginally better than ses().
+
+<strong>d. </strong>
+
+Let's calculate a 95% prediction interval for the first forecast for each series
+
+<strong>SES (Papeback)</strong>
+
+```{r}
+print(paste('Prediction interval of SES (Papeback)', 'Lower:', round(pc_ses$lower[1, '95%'],2), 'Upper:', round(pc_ses$upper[1,'95%']),2))
+```
+
+<strong>SES (Hardcover)</strong>
+
+```{r}
+print(paste('Prediction interval of SES (Hardcover)','Lower:', round(hc_ses$lower[1, '95%'],2), 'Upper:', round(hc_ses$upper[1,'95%']),2))
+```
+
+<strong>RMSE SES (Paperback)</strong>
+
+```{r}
+print(paste('Prediction interval using RMSE SES (Paperback)','Lower:', round(pc_ses$mean[1] - 1.96 * accuracy(pc_ses)[2],2), 'Upper:', round(pc_ses$mean[1] + 1.96 * accuracy(pc_ses)[2],2)))
+```
+
+
+<strong>RMSE SES (Hardcover)</strong>
+
+```{r}
+print(paste('Prediction interval using RMSE SES (Hardcover)', 'Lower:', round(hc_ses$mean[1] - 1.96 * accuracy(hc_ses)[2],2), 'Upper:', round(hc_ses$mean[1] + 1.96 * accuracy(hc_ses)[2],2)))
+```
+
+
+<strong>Holt (Papeback)</strong>
+
+
+```{r}
+print(paste('Prediction interval of R Holt (Papeback)', 'Lower:', round(pc_holt$lower[1, '95%'],2), 'Upper:', round(pc_holt$upper[1,'95%']),2))
+```
+
+<strong>Holt (Hardcover)</strong>
+
+```{r}
+print(paste('Prediction interval of R Holt (Hardcover)', 'Lower:', round(hc_holt$lower[1, '95%'],2), 'Upper:', round(hc_holt$upper[1,'95%']),2))
+```
+
+<strong>RMSE Holt (Paperback)</strong>
+
+```{r}
+print(paste('Prediction interval using RMSE Holt (Paperback)','Lower:', round(pc_holt$mean[1] - 1.96 * accuracy(pc_holt)[2],2), 'Upper:', round(pc_holt$mean[1] + 1.96 * accuracy(pc_holt)[2],2)))
+```
+
+
+<strong>RMSE Holt (Hardcover)</strong>
+
+```{r}
+print(paste('Prediction interval using RMSE Holt (Hardcover)','Lower:', round(hc_holt$mean[1] - 1.96 * accuracy(hc_holt)[2],2), 'Upper:', round(hc_holt$mean[1] + 1.96 * accuracy(hc_holt)[2],2)))
+```
+
+
+Prediction interval produced using R and RMSE for both the methods (SES and Holt) are not exactly same but very close
+
+
+#### 7.7
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 6/Screen Shot 2020-10-01 at 9.10.38 PM.png")
+```
+
+
+<strong>Answer</strong>
+
+1) Experiment with default holt() method
+
+```{r}
+default <- holt(eggs, h=100)
+```
+
+2) Experiment with damped holt() method
+
+```{r}
+damped <- holt(eggs, h=100, damped = T)
+```
+
+
+3) Experiment with exponential holt() method
+
+```{r}
+exponential <- holt(eggs, h=100, exponential = T)
+```
+
+4) Experiment with box cox method
+
+```{r}
+lambda <- holt(eggs, h=100, lambda = 'auto', biasadj = T)
+```
+
+
+Now, let's plot all the four plots above:
+
+```{r}
+autoplot(eggs) +
+  autolayer(default, series='Default', PI=F) +
+  autolayer(damped, series='Damped', PI=F) +
+  autolayer(exponential, series='Exponential', PI=F) +
+  autolayer(lambda, series='Box-Cox Transformed', PI=F) +
+  ggtitle('Forecast of US Eggs Prices') +
+  xlab('Year') +
+  ylab('Price of Dozen Eggs')
+```
+
+From the above plot, default holtz method has a straight line which shows us a negative trend of egg prives with increase in year.Damp method damps forecast line into straight horizontal line. Exponential metohd is close to box cox transformed prediction. Box cox and exponential depicts a slight decline of egg prices with increase in year.
+
+We can conclude that US egg prices will decrease in the coming years, which can also be attributed to increase and improvement in poultry farming methods and technniques.
+
+
+
+#### 7.8
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 6/Screen Shot 2020-10-01 at 9.17.59 PM.png")
+```
+
+
+<strong>Answer</strong>
+
+
+Load the retail dataset
+
+
+```{r}
+file2 = "retail.xlsx"
+retaildata <- read.xlsx(file2, sheet=1, startRow=2)
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+ggseasonplot(myts)
+```
+
+
+<strong>a.</strong>
+
+As we see from the graph above, retail data points are increasing yearly and also monthly every year. Also the change is seasonal and the seasonality is changing with increasing trend in time. Since from the graph above, seasonality is not constant, therefore multiplicative seasonality is the best approach to follow with because seasonal variations are not constant and additive method can handle constant seasonal variations.
+
+
+<strong>b.</strong>
+
+
+```{r}
+fit1 = hw(myts, seasonal="multiplicative", h=1)
+fit2 = hw(myts, seasonal="multiplicative", damped=TRUE, h=1)
+
+autoplot(myts) +
+    autolayer(fit1, series="HW multiplicative forecasts", PI=FALSE) +
+    autolayer(fit2, series="HW damped trend multiplicative forecasts", PI=FALSE) +
+    xlab("Time") +
+    ylab("Retail data") +
+    guides(colour=guide_legend(title="Forecast"))
+```
+
+In the above graph we see Holt-Winters’ multiplicative forecasts and damped trend multiplicative forecasts.
+
+
+<strong>c.</strong>
+
+
+Now let's compare the RMSE of the one-step forecasts from the two methods above:
+
+Accuracy of undamped trend fit:
+
+```{r}
+accuracy(fit1)
+```
+
+
+Accuracy of damped trend fit:
+
+
+```{r}
+accuracy(fit2)
+```
+
+
+Accuracy of undamped fit has a lower RMSE. I would go with undamped trend since it has a lower RMSE and also from the above graph, undamped trend shows gives proper information about increasing trend than damped trend.
+
+
+<strong>d.</strong>
+
+Let's check that the residuals from the best method look like white noise.
+
+
+```{r}
+par(mfrow=c(1,2))
+plot(fit1$residuals)
+
+```
+
+
+The residuals appear to be as white noise with spikes.
+
+<strong>e.</strong>
+
+
+```{r}
+train <- window(myts, end=c(2010, 12))
+test <- window(myts, start=c(2011,1))
+
+autoplot(myts) +
+  autolayer(train, series="Training") +
+  autolayer(test, series="Test") +
+  ggtitle('Train-Test Split') +
+  ylab('Turnover')
+```
+
+
+Above we see the plot of training and testing dataset which has increasing trend with time and also it has seasonality.
+
+<strong> Test set RMSE for Seasonal naïve, Holt-Winter's Multiplicative Method, Holt-Winter's Additive Method with Box-Cox Transform approach</strong>
+
+```{r}
+fit_snaive <- snaive(train, h=36)
+fit1_hw <- hw(train, h=36, seasonal='multiplicative', damped=F)
+fit2_hw <- hw(train, h=36, seasonal='additive', damped=F, lambda='auto')
+
+```
+
+Calculating RMSE's
+```{r}
+fit_snaive_acc<-accuracy(fit_snaive)[2]
+fit1_hw_acc<-accuracy(fit1_hw)[2]
+fit2_hw_acc<-accuracy(fit2_hw)[2]
+```
+
+
+Tabulating RMSE's
+
+
+```{r}
+df <- c(fit_snaive_acc, fit1_hw_acc, fit2_hw_acc)
+names(df) <- c('Seasonal Naive Forecast', "Holt-Winter's Multiplicative Method", 
+               "Holt-Winter's Additive Method with Box-Cox Transform")
+df
+```
+
+
+As seen above, the RMSE of the Holt-Winter's Additive Method with Box-Cox Transform  model is lower to that of the naive seasonal and Holt-Winter's Multiplicative model. 
+
+
+#### 7.9
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 6/Screen Shot 2020-10-02 at 3.31.01 PM.png")
+```
+
+<strong>Answer</strong>
+
+<strong>Applying STL decomposition to box cox trsformation for retial series:</strong>
+
+
+```{r}
+myts.stl.fit <- stlm(train, lambda="auto")
+accuracy(myts.stl.fit)
+```
+
+
+<strong>Applying ETS model with multiplicative error(M), additive trend(A) and multiplicative seasonality(M) for retial series:</strong>
+
+```{r}
+
+myts.ets.fit <- ets(train, model = "MAM")
+autoplot(myts.ets.fit)
+```
+
+
+```{r}
+accuracy(myts.ets.fit)
+```
+
+
+RMSE's for both the models above is lower than previous two models. Therefore, above two methods performed better compared to previous two methods.
+
