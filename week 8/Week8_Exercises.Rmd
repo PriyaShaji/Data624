@@ -1,0 +1,815 @@
+---
+title: "Week8_ Exercises"
+author: "Priya Shaji"
+date: "10/5/2020"
+output: html_document
+---
+
+## Forecasting Principles and Practice
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE}
+library(fpp2)
+library(ggplot2)
+library(tseries)
+library(openxlsx)
+library(tidyverse)
+library(kableExtra)
+```
+
+
+#### 8.1
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 8/Screen Shot 2020-10-05 at 4.20.50 PM.png")
+```
+
+
+<strong>a.</strong>
+
+A series is a white noise if 95% of spikes in the ACF lies within ±2√T, where 
+
+T = length of time series.
+
+Therefore, as per the equation, as T gets larger, the range between blue dashed line around zero(as mean) gets narrower In first, second and third series; few spikes do seem to touch the blue dashed line(95% interval border). Since correlations for all the seires lies within the 95% range, it confirms that the data has white noise.
+
+<strong>b.</strong>
+
+According to the equation: ±2√T , It follows the law of large numbers. As the no. of observations increase or as the length of the time series increase, no. of outliers from the mean decreases. Now, since the length of each series is different, there will be different equations for white noise.
+
+
+#### 8.2
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 8/Screen Shot 2020-10-05 at 4.22.24 PM.png")
+```
+
+Let's plot the dataset and also ACF and PACF plots:
+
+```{r}
+ggtsdisplay(ibmclose)
+```
+
+
+As we see from above graph, there is an increasing trend followed by a downward trend. Therefore, timeseries  data that has a trend or a seasonality is not stationary.
+
+ACF and PACF plots, autocorrelation lines are well beyond the range of 95% interval, which clearly shows that the data is not white noise.
+
+
+#### 8.3
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 8/Screen Shot 2020-10-05 at 4.23.05 PM.png")
+```
+
+Before beginning let's first know how a time series is said to be stationary if it holds the following conditions true.
+
+- The mean value of time-series is constant over time, which implies, the trend     component is nullified.
+
+- The variance does not increase over time.
+
+- Seasonality effect is minimal.
+
+<strong>a.</strong>
+
+Let's plot the series `usnetelec`
+
+
+```{r}
+autoplot(usnetelec, main = "US Net Electricity Generation") +
+  theme(axis.title = element_blank())
+```
+
+
+As we see from the above graph, there is a linear trend. Let's see if differencing it can make it stationary.
+
+Since usnetelec is a non-seasonal data, there is no seasonal differencing required.
+
+Now, let's see no. of differences need to make it stationary
+
+```{r}
+# Make it stationary
+ndiffs(usnetelec)  # number of differences need to make it stationary
+```
+
+
+According to the number above, data should be differenced at least 1 i.e. >1
+
+Differenciating twice would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(usnetelec, differences= 2)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+
+
+```{r}
+usnetelec_lambda <- BoxCox.lambda(usnetelec)
+bc_usnetelec <- BoxCox(usgdp, lambda = usnetelec_lambda)
+print(usnetelec_lambda)
+plot(diff(bc_usnetelec), type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+With a lambda value of 0.5167714, this data can be stationerized.
+
+<strong>b.</strong>
+
+Let's plot the series `usgdp`
+
+
+```{r}
+autoplot(usgdp, main = "Quarterly US Gross Domestic Product") +
+  theme(axis.title = element_blank())
+```
+
+
+As we see from the above graph, there is a linear incresing trend. Let's see if differencing it can make it stationary.
+
+Since usnetelec is a non-seasonal data, there is no seasonal differencing required.
+
+Now, let's see no. of differences need to make it stationary
+
+```{r}
+# Make it stationary
+ndiffs(usgdp)  # number of differences need to make it stationary
+```
+
+
+According to the number above, data should be differenced at least 2 i.e. >2
+
+Differenciating twice would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(usgdp, differences= 2)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+
+```{r}
+usgdp_lambda <- BoxCox.lambda(usgdp)
+bc_usgdp <- BoxCox(usgdp, lambda = usgdp_lambda)
+print(usgdp_lambda)
+plot(diff(bc_usgdp), type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+With a lambda value of 0.366352, this data can be stationerized.
+
+
+<strong>c.</strong>
+
+Let's plot the series `mcopper`
+
+
+```{r}
+autoplot(mcopper, main = "Monthly Grade A Copper Prices") +
+  theme(axis.title = element_blank())
+```
+
+
+As we see from the above graph, there is a gradual incresing trend. Let's see if differencing it can make it stationary.
+
+Since usnetelec is a non-seasonal data, there is no seasonal differencing required.
+
+Now, let's see no. of differences need to make it stationary
+
+```{r}
+# Make it stationary
+ndiffs(mcopper)  # number of differences need to make it stationary
+```
+
+
+According to the number above, data should be differenced at least 1 i.e. >1
+
+Differenciating twice would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(usgdp, differences= 2)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+
+```{r}
+mcopper_lambda <- BoxCox.lambda(mcopper)
+bc_mcopper <- BoxCox(mcopper, lambda = mcopper_lambda)
+print(mcopper_lambda)
+plot(diff(bc_mcopper), type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+With a lambda value of 0.1919047, this data can be stationerized.
+
+
+
+
+<strong>d.</strong>
+
+Let's plot the series `enplanements`
+
+
+```{r}
+autoplot(enplanements, main = "Monthly US Domestic Enplanements") +
+  theme(axis.title = element_blank())
+```
+
+
+As we see from the above graph, there is a incresing trend also this graph has seasonality. Let's see if differencing it can make it stationary.
+
+
+Now, let's see no. of differences need to make it stationary
+
+```{r}
+# Make it stationary
+nsdiffs(enplanements)  # number of differences need to make it stationary
+```
+
+According to the number above, data should be seasonally differenced at least 1 i.e. >1
+
+
+```{r}
+enplanements_seasdiff <- diff(enplanements, lag=frequency(enplanements), differences=1)  # seasonal differencing
+plot(enplanements_seasdiff, type="l", main="Seasonally Differenced")  # still not stationary!
+
+```
+
+
+Since the data is now se-seasonalized, let's make it stationery
+
+According to the number above, data is stationerized
+
+Differenciating twice would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(enplanements_seasdiff, differences= 1)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+
+```{r}
+enplanements_lambda <- BoxCox.lambda(enplanements)
+bc_enplanements <- BoxCox(enplanements, lambda = enplanements_lambda)
+print(enplanements_lambda)
+plot(diff(bc_enplanements), type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+With a lambda value of 0.2269461, this data can be stationerized.
+
+
+
+<strong>e.</strong>
+
+Let's plot the series `visitors`
+
+
+```{r}
+autoplot(visitors, main = "Monthly Australian Overseas Visitors") +
+  theme(axis.title = element_blank())
+```
+
+
+As we see from the above graph, there is a incresing trend also this graph has seasonality. Let's see if differencing it can make it stationary.
+
+
+Now, let's see no. of differences need to make it stationary
+
+```{r}
+# Make it stationary
+nsdiffs(visitors)  # number of differences need to make it stationary
+```
+
+According to the number above, data should be seasonally differenced at least 1 i.e. >1
+
+
+```{r}
+visitors_seasdiff <- diff(visitors, lag=frequency(visitors), differences=1)  # seasonal differencing
+plot(visitors_seasdiff, type="l", main="Seasonally Differenced")  # still not stationary!
+
+```
+
+
+Since the data is now se-seasonalized, let's make it stationery
+
+According to the number above, data is stationerized
+
+Differenciating twice would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(visitors_seasdiff, differences= 1)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+
+```{r}
+visitors_lambda <- BoxCox.lambda(visitors)
+bc_visitors <- BoxCox(visitors, lambda = visitors_lambda)
+print(visitors_lambda)
+plot(diff(bc_visitors), type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+With a lambda value of 0.2775249, this data can be stationerized.
+
+
+#### 8.5
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 8/Screen Shot 2020-10-05 at 4.23.44 PM.png")
+```
+
+Loading the retail data:
+
+```{r}
+file2 = "retail.xlsx"
+retaildata <- read.xlsx(file2, sheet=1, startRow=2)
+retail <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+```
+
+
+Let's plot the series `retail`
+
+
+```{r}
+autoplot(retail, main = "Monthly Retail Sales") +
+  theme(axis.title = element_blank())
+```
+
+
+As we see from the above graph, there is a incresing trend also this graph has seasonality. Let's see if differencing it can make it stationary.
+
+
+Now, let's see no. of differences need to make it stationary
+
+```{r}
+# Make it stationary
+nsdiffs(retail)  # number of differences need to make it stationary
+```
+
+According to the number above, data should be seasonally differenced at least 1 i.e. >1
+
+
+```{r}
+retail_seasdiff <- diff(retail, lag=frequency(retail), differences=1)  # seasonal differencing
+plot(retail_seasdiff, type="l", main="Seasonally Differenced")  # still not stationary!
+
+```
+
+
+Since the data is now se-seasonalized, let's make it stationery
+
+According to the number above, data is stationerized
+
+Differenciating twice would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(retail_seasdiff, differences= 1)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+
+```{r}
+retail_lambda <- BoxCox.lambda(retail)
+bc_retail <- BoxCox(retail, lambda = retail_lambda)
+print(retail_lambda)
+plot(diff(bc_retail), type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+With a lambda value of 0.1276369, this data can be stationerized.
+
+#### 8.6
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 8/Screen Shot 2020-10-05 at 4.24.43 PM.png")
+```
+
+
+<strong>a.</strong>
+
+Using the following code with given values:
+
+```{r}
+y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- 0.6*y[i-1] + e[i]
+```
+
+
+<strong>b.</strong>
+
+```{r}
+ar <- function(theta){
+  set.seed(42)
+  y <- ts(numeric(100))
+  e <- rnorm(100, sd=1)
+  for(i in 2:100){
+    y[i] <- theta*y[i-1] + e[i]}
+  return(y)
+}
+
+p <- autoplot(ar(0.6))
+for(phi in seq(0.1, 0.9, 0.1)){
+  p <- p + autolayer(ar(phi), series = paste(phi))
+}
+p
+
+```
+
+
+As you see above, there'sa fixed random number seed with which we can see the effect of phi. 
+
+We analyse that as value of phi increases, distance from 0 increases. With smaller value of phi, data get more random compared to higer value of phi. Whereas, as the value of phi increses, autocorrelation will be higher. 
+
+
+<strong>c.</strong>
+
+Generate data from MA(1) model with given values:
+
+
+```{r}
+ma <- function(theta){
+  set.seed(42)
+  y <- ts(numeric(100))
+  e <- rnorm(100, sd=1)
+  for(i in 2:100){
+    y[i] <- theta*e[i-1] + e[i]}
+  return(y)
+}
+ma(0.6)
+```
+
+
+<strong>d.</strong>
+
+Creating time plot for the series:
+
+
+```{r}
+autoplot(cbind(e, ma(.1), ma(.6), ma(1), ma(3)), facet = TRUE)
+```
+
+
+By analysing above graph, we can say that as phi value changes, time series pattern remains constant. However, as the value of phi increases, scale(y-axis) increases.
+
+
+<strong>e.</strong>
+
+Generte data from ARIMA(1,1) model with given values:
+
+
+```{r}
+y <- ts(numeric(100))
+e <- rnorm(100, sd=1)
+for(i in 2:100){
+  y[i] <- 0.6*y[i-1] + 0.6*e[i-1] + e[i]
+}
+
+autoplot(y) +
+  ggtitle('ARMA(1,1)')
+```
+
+
+<strong>f.</strong>
+
+Generte data from AR(2) model with given values:
+
+
+```{r}
+y2 <- ts(numeric(100))
+e <- rnorm(100, sd=1)
+for(i in 3:100){
+  y2[i] <- (-0.8)*y2[i-1] + 0.3*y2[i-2] + e[i]
+}
+
+autoplot(y2) +
+  ggtitle('AR(2)')
+```
+
+
+<strong>g.</strong>
+
+```{r}
+par(mfrow=c(1,2))
+ggAcf(y) + ggtitle('ARMA(1,1)')
+ggAcf(y2) + ggtitle('AR(2)')
+```
+
+
+By compairing both series, AR(2) data is non-stationary as mentioned before. This data also seems to have seasonality which increases over time. ARIMA(1,1) data does not seem to have this seasonality. It seems to be random and stationery compared to AR(2) data. 
+
+By seeing the ACF plots, AR(2) does show seasonality and ARIMA(1,1) shows random trend and no seasonality.
+
+
+#### 8.7
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 8/Screen Shot 2020-10-05 at 4.25.23 PM.png")
+```
+
+
+<strong>a. </strong>
+
+
+Let's plot the time series data:
+
+```{r}
+autoplot(wmurders)
+```
+
+
+From the above plot we see that, from mid 1950 to mid 1970, there is an increasing trend followed by some fluctions but has on seasonlaity. 
+
+Differenciating it would stationarize our data:
+
+```{r}
+
+stationaryTS <- diff(wmurders, differences= 2)
+plot(stationaryTS, type="l", main="Differenced and Stationary")  # appears to be stationary
+```
+
+As we see there is a change in the linear trend of the data, and data looks somewhat stationery
+
+
+In order to confirm the above result, let's do a Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf. test() indicates that it is stationary.
+
+
+```{r}
+
+adf.test(stationaryTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(stationaryTS)
+
+```
+
+
+As we see, adf test has a p value less than 0.05, which confirms that our data is stationery.
+
+Now, let's plot ACF and PACF plots
+
+```{r}
+ggtsdisplay(stationaryTS)
+```
+
+
+As we see from above plots, PACF is decaying . In ACF spikes in lag 1 and lag 2 are significant. None of them are significant beyond lag 2.
+
+Therefore, `ARIMA(0,2,2)` is preferred to model the data.
+
+<strong>b.</strong>
+
+According to the book, the constant has an important effect on the long-term forecasts obtained from these models.
+
+Also, ARIMA model of the data means it includes twice differencing. Also, if a model has constant, twice integrated constant will give a quadratic trend, which is not preferred in forecasting.
+
+Therefore, constant will not be included in the model.
+
+<strong>c.</strong>
+
+Model interms of backshift operator:
+
+
+`(1−B)2∗yt=(1+theta1∗B+theta2∗B2)∗et`
+ 
+
+<strong>d.</strong>
+
+Fit the model
+
+```{r}
+(fit <- Arima(wmurders, order=c(0,2,2)))
+```
+
+
+Check residuals
+
+```{r}
+checkresiduals(fit)
+```
+
+
+From ACF plot it shows that spikes are within the blue line range, therefore, it can be considered as white noise. 
+
+Residual plot shows that residuals are not normal but satisfactory in nature. p-value from Ljung-Box is not significant which fails to reject the null hypothesis that time series isn't autocorrelated.
+
+
+<strong>e.</strong>
+
+Forecasts using `forecast()` method:
+
+```{r}
+fc <- forecast(fit, h=3) 
+
+fc %>%
+  kable() %>%
+  kable_styling()
+
+```
+
+```{r}
+fc$mean
+```
+
+
+Forecasts using manual calculation:
+
+```{r}
+fc$model
+```
+
+
+`(1−B)2∗yt=(1−1.0181∗B+0.1470∗B2)∗et`
+ 
+ yt=2yt−1−yt−2+et−1.0181∗et−1+0.1470∗et−2
+ 
+```{r}
+years <- length(wmurders)
+e <- fc$residuals
+fc1 <- 2*wmurders[years] - wmurders[years - 1] - 1.0181*e[years] + 0.1470*e[years - 1]
+fc2 <- 2*fc1 - wmurders[years] + 0.1470*e[years]
+fc3 <- 2*fc2 - fc1
+```
+ 
+```{r}
+c(fc1, fc2, fc3)
+```
+ 
+Therefore manully calculated values matches with values forecasted using `forecasts` method.
+
+<strong>f.</strong>
+
+A plot of the series with forecasts and prediction intervals for the next three periods:
+
+
+```{r}
+autoplot(fc)
+```
+
+
+<strong>g.</strong>
+
+
+Accuracy for ARIMA(0,2,2)
+
+```{r}
+accuracy(fc)
+```
+
+Accuracy for ARIMA(1,2,1)
+
+```{r}
+fc_autoarima <- forecast(auto.arima(wmurders), h = 3)
+accuracy(fc_autoarima)
+```
+
+
+
+Without RMSE, all errors show that ARIMA(0, 2, 2) is better than ARIMA(1, 2, 1).
+
+
+
+Using auto.arima function with stepwise and approximation options false gave ARIMA(0, 2, 3) model
+
+
+```{r}
+(fc_autoarima2 <- forecast(auto.arima(wmurders, stepwise = FALSE, approximation = FALSE), h = 3))
+```
+
+
+
+Accuracy for ARIMA(0,2,3)
+
+
+```{r}
+accuracy(fc_autoarima2)
+```
+
+In this case, some errors were better but others were not.
+
+
+Residuals of ARIMA(0,2,2)
+
+
+```{r}
+checkresiduals(fc)
+```
+
+Residuals of ARIMA(0,2,3)
+
+```{r}
+checkresiduals(fc_autoarima2)
+```
+
+
+Both models i.e. ARIMA(0,2,2) and ARIMA(0,2,3) are very close and similar residuals. ARIMA (0,2,2) is preferred because error values for ARIMA(0,2,3) were higher compared to ARIMA(0,2,2).
+
+
+
+
+
+
+
+
+
