@@ -1,0 +1,928 @@
+---
+title: "Project 1"
+author: "Priya Shaji"
+date: "10/21/2020"
+output:
+  html_document:
+    theme: journal
+    smooth_scroll: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    code_folding: hide
+    df_print: paged
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  word_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+## Load required libraries {.tabset}
+
+```{r message=FALSE, warning=FALSE}
+
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(tseries)
+library(forecast)
+library(lubridate)
+library(tidyverse)
+
+```
+
+## Part A{.tabset}
+
+In part A, I want you to forecast how much cash is taken out of 4 different ATM machines for May 2010.  The data is given in a single file.  The variable ‘Cash’ is provided in hundreds of dollars, other than that it is straight forward.   I am being somewhat ambiguous on purpose to make this have a little more business feeling.  Explain and demonstrate your process, techniques used and not used, and your actual forecast.  I am giving you data via an excel file, please provide your written report on your findings, visuals, discussion and your R code via an RPubs link along with the actual.rmd file  Also please submit the forecast which you will put in an Excel readable file.
+
+
+<strong>Read the dataset</strong>
+
+
+```{r}
+atm <- readxl::read_excel('/Users/priyashaji/Documents/cunymsds/Data 624/project 1/ATM624Data.xlsx') %>%
+  mutate(DATE = as.Date(DATE, origin='1899-12-30'))
+
+atm %>%
+  summary()
+```
+
+From the data summary above, we see that there are total 19 NA's in the dataset. 
+
+<strong>Let's examine the NA's:</strong>
+
+```{r}
+atm %>%
+  filter(!complete.cases(.)) %>%
+  DT::datatable()
+```
+
+
+
+Examining NA's in the dataset we find that out of 19 rows, there are 5 rows with missing values and 14 of them are empty ATM and Cash column.
+
+<strong>Let's impute 5 missing values using median of each remaining values.</strong>
+
+```{r}
+atm <- atm %>%
+  filter(!(is.na(.$ATM) & is.na(.$Cash)))
+
+medians <- atm %>%
+  filter(!is.na(Cash)) %>%
+  group_by(ATM) %>%
+  summarise(med = median(Cash))
+
+atm[is.na(atm$Cash) & atm$ATM == 'ATM1', ]$Cash <- medians$med[medians$ATM == 'ATM1'][1] 
+atm[is.na(atm$Cash) & atm$ATM == 'ATM2', ]$Cash <- medians$med[medians$ATM == 'ATM2'][1]
+```
+
+
+<strong>Let's analyze the dataset now:</strong>
+
+
+```{r}
+atm %>%
+  arrange(desc(Cash)) %>%
+  head(10)
+```
+
+
+As we see a large value for Cash in ATM 4, there might be many reasons for this large value like typo error, occurence of an event that day etc. But this large value can be adjusted. By setting this value with the next largest value in the ATM column can benefit our modelling of analysis and not deviating the algorithm with an outlier.
+
+```{r}
+n <- atm$Cash %>%
+  na.omit() %>%
+  length()
+
+temp <- atm$Cash %>%
+  na.omit() %>%
+  sort(partial=c(n-1, n))
+
+largest.2 <- temp[n-1]
+largest <- temp[n]
+
+atm <- atm %>%
+  mutate(Cash = ifelse(Cash == largest, largest.2, Cash))
+```
+
+
+Therefore, we have a clean data for analysis.
+
+<strong>Summary of our refined dataset:</strong>
+
+```{r}
+atm %>%
+  summary()
+```
+
+
+Plotting the ATM dataset to analyse data distribution:
+
+```{r}
+atm %>%
+  ggplot(aes(DATE, Cash, color=ATM)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~ATM, scales='free') +
+  theme_bw() +
+  theme(legend.position = 'none') +
+  labs(x="", y="")
+```
+
+
+As we see from above plots: 
+
+ATM 1: This atm appears to have a withdrawls in a cyclic manner that is not being captured by linear regression best fit line.
+
+ATM 2 and ATM 4 : They appear to have some consistent withdrawl values which are being captured by regression line.
+
+ATM 3: This particular ATM came into picture only by late April 2010.
+
+On the basis of these 4 different ATM'S , I will create 4 different models for each.
+
+```{r}
+atm.1 <- atm %>%
+  filter(ATM == 'ATM1')
+atm.2 <- atm %>%
+  filter(ATM == 'ATM2')
+atm.3 <- atm %>%
+  filter(ATM == 'ATM3')
+atm.4 <- atm %>%
+  filter(ATM == 'ATM4')
+```
+
+
+```{r}
+
+ATM1 = atm %>% filter(ATM=="ATM1")%>%select(-DATE,-ATM) %>%  ts(start=c(2009,as.numeric(format(as.Date("2009-05-01"), "%j"))), frequency = 365)
+
+ATM2 = atm %>% filter(ATM=="ATM2")  %>%select(-DATE,-ATM) %>%  ts(start=c(2009,as.numeric(format(as.Date("2009-05-01"), "%j"))), frequency = 365)
+
+ATM3 = atm %>% filter(ATM=="ATM3",Cash>0)  %>%select(-DATE,-ATM) %>%   ts(start=c(2010,as.numeric(format(as.Date("2010-04-28"), "%j"))),end=c(2010,as.numeric(format(as.Date("2010-04-30"), "%j"))) ,frequency = 365)
+
+ATM4 = atm %>% filter(ATM=="ATM4")  %>%select(-DATE,-ATM) %>%  ts(start=c(2009,as.numeric(format(as.Date("2009-05-01"), "%j"))), frequency = 365)
+
+```
+
+
+## ATM 1
+
+Now, let's create facets of ATM 1 data to get more granular level analysis:
+
+```{r}
+atm.1 <- atm.1 %>%
+  mutate(day_of_week = factor(format(atm.1$DATE, "%a"), levels=c('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'))) 
+atm.1 %>%
+  ggplot(aes(DATE, Cash)) +
+  geom_point() +
+  facet_wrap(~day_of_week) + 
+  theme_bw() +
+  labs(x="", y="")
+```
+
+
+
+As we saw previously, there seems to be cyclic withdrawl trends for ATM 1. By seeing the facets by day of the week;  
+
+- Sunday, Monday, Wednesday, Friday and Saturday appear to be consistant across the year.      Tuesday and Thursday on the other hand are bit more difficult to unravel.
+
+- In 2009, most of the Thursday's have consistently low withdrawl rates and increses by March 2010.
+
+- At same date time range, withdrawl rate of tuesday decreased.
+
+Let's analyse the dataset trend with only recent data using a different visualization
+
+```{r}
+autoplot(ATM1)+labs(title = "Cash withdrawl ATM1",
+       subtitle = "5/1/2009 - 4/30/2010",
+       x = "Date",y = "Cash") 
+```
+
+
+By seeing this visualization, it's much easier to find a trend. Now as we see, I am not using the dataset of beginning months of 2009, since it's an older data which appears to be not in sync with the current trends. Therefore, I subset the dataset from more recent data.
+
+
+```{r}
+ggtsdisplay(ATM1)
+```
+
+ACF plot shows that data is notcorrelated and is not white noise.
+
+Checking if data needs to be stationarized
+
+```{r}
+ndiffs(ATM1)
+```
+
+No, data does not need to be stationarized
+
+<strong>Modeling our stationarized data using `ets()` </strong>
+
+ETS point forecasts are equal to the medians of the forecast distributions. For models with only additive components, the forecast distributions are normal, so the medians and means are equal. For ETS models with multiplicative errors, or with multiplicative seasonality, the point forecasts will not be equal to the means of the forecast distributions.
+
+```{r}
+Model1_ATM1 = ets(ATM1)
+checkresiduals(Model1_ATM1)
+```
+
+As we see from above plot, residuals are not normally distributed and Ljung-Box test did not pass means p-value is significant which confirms that it rejects the null hypothesis that the time series isn’t autocorrelated
+
+
+<strong>Summarizing our dataset:</strong>
+
+
+```{r}
+summary(Model1_ATM1)
+```
+
+
+Summary of model shows that AIC is 4784.752 and RMSE value is high which shows that ets was not able to capture the data trend.
+
+
+<strong>Plot the forecasts using autoplot:</strong>
+
+```{r}
+autoplot(forecast(Model1_ATM1, 31))
+```
+
+
+<strong>ARIMA</strong>
+
+using `auto.arima()` for forecasting data points:
+
+```{r}
+Model2_ATM1 =auto.arima(ATM1)
+checkresiduals(Model2_ATM1)
+```
+
+As we see from above plot, residuals are not normally distributed and Ljung-Box test did not pass means p-value is significant which confirms that it rejects the null hypothesis that the time series isn’t autocorrelated
+
+
+Summarizing our dataset:
+
+
+```{r}
+summary(Model2_ATM1)
+```
+
+AIC value is 3648.59 and RMSE value is 35.43961.
+
+<strong>Plot the forecasts:</strong>
+
+```{r}
+autoplot(forecast(Model2_ATM1, 31))
+```
+
+
+Since the ARIMA model too has high rmse value, I would now group the data by weekly.
+
+
+```{r}
+ATM1_Weekly = ts(ATM1, frequency = 7)
+
+ggtsdisplay(ATM1_Weekly)
+```
+
+
+ARIMA model by weekly:
+
+```{r}
+Model3_ATM1_Weekly =auto.arima(ATM1_Weekly)
+
+checkresiduals(Model3_ATM1_Weekly)
+```
+
+
+This gave ARIMA(0,0,1)(0,1,2). residuals plot looks normal.
+
+Summarizing the model:
+
+```{r}
+summary(Model3_ATM1_Weekly)
+```
+
+rmse value of this model is less compared to rmse of other two models.
+
+plot the forecsts using autoplot:
+
+```{r}
+autoplot(forecast(Model3_ATM1_Weekly, 31))
+```
+
+
+```{r}
+ATM1_Forecast = forecast(Model3_ATM1_Weekly, 31, level = 95)
+
+Forecast_ATM1 =data_frame(DATE = rep(max(atm$DATE) + 1:31),
+           ATM = rep("ATM1"),
+           Cash = as.numeric( ATM1_Forecast$mean))  
+```
+
+Therefore, the above plotted predictions appear reasonable based on the trends in recent dataset.
+
+
+
+## ATM 2
+
+<strong>Analyze the dataset distribution:</strong>
+
+
+ATM 2 dataset distribution is very similar to ATM 1 data distribution. 
+
+- Monday, Tuesday, Wedneday and Thursday see considerable shifts in their values. 
+- Sunday and Friday also exhibit changes but to a less extent. 
+
+Now, I am going to subset this ATM 2 dataset also to analyse more recent trends.
+
+
+```{r}
+autoplot(ATM2)+labs(title = "Cash withdrawl ATM2", subtitle = "5/1/2009 - 4/30/2010",
+       x = "Date",y = "Cash")
+```
+
+
+By seeing this visualization, it's much easier to find a trend. Now as we see, I am not using the dataset of beginning months of 2009, since it's an older data which appears to be not in sync with the current trends. Therefore, I subset the dataset from more recent data.
+
+I would now group the data by weekly.
+
+```{r}
+ATM2_Weekly = ts(ATM2, frequency = 7)
+
+ggtsdisplay(ATM2_Weekly)
+```
+
+Checking if data needs to be stationarized
+
+```{r}
+ndiffs(ATM2)
+```
+
+
+Yes, data does need to be stationarized once
+
+<strong>ARIMA model:</strong>
+
+```{r}
+Model1_ATM2_Weekly =auto.arima(ATM2_Weekly,lambda=BoxCox.lambda(ATM2_Weekly))
+checkresiduals(Model1_ATM2_Weekly)
+```
+
+
+This gave ARIMA(3,0,13(0,1,1). residuals plot looks somewhat normal.
+
+Summarizing the model:
+
+```{r}
+summary(Model1_ATM2_Weekly)
+```
+
+rmse value of this model is 24.25163 and AIC is 2548.39.
+
+plot the forecsts using autoplot:
+
+```{r}
+autoplot(forecast(Model1_ATM2_Weekly, 31, level = 95))
+```
+
+
+```{r}
+ATM2_Forecast = forecast(Model1_ATM2_Weekly, 31, level = 95)
+
+Forecast_ATM2 =data_frame(DATE = rep(max(atm$DATE) + 1:31),
+           ATM = rep("ATM2"),
+           Cash = as.numeric( ATM2_Forecast$mean) )
+```
+
+
+Therefore, the above plotted predictions appear reasonable based on the trends in recent dataset.
+
+
+## ATM 3
+
+As compared to ATM 1 and ATM 2, ATM 3 appears to be much challenging to predict since the dataset is not showing much changes in withdrawl and as per the plot below, cash withdrawl for ATM 3 seems stagnant to null for year 2009 till early march 2010 with few outliers in late march 2010.
+
+```{r}
+autoplot(ATM3)+labs(title = "Cash withdrawl ATM3",
+       subtitle = "5/1/2009 - 4/30/2010",
+       x = "Date",y = "Cash") 
+```
+
+
+
+At this stage where we face lack of data observations to make predictions for this ATM 3, we can use a ATM data values which are more similar to ATM 3. From the below table and cmapiring ATM values, ATM 1 and ATM 3 values are very close and similar:
+
+```{r}
+atm %>%
+  filter(DATE >= as.POSIXct('2010-04-28')) %>%
+  spread(key='ATM', value='Cash') %>%
+  DT::datatable()
+```
+
+
+Therefore, going by the above comparisons, I will prefer to use ATM 1 for modelling ATM 3 predictions.
+
+```{r}
+forecast.atm.3 <- Model3_ATM1_Weekly
+checkresiduals(forecast.atm.3)
+```
+
+
+This gave ARIMA(0,0,1)(0,1,2). residuals plot looks normal.
+
+Summarizing the model:
+
+```{r}
+summary(forecast.atm.3)
+```
+
+rmse value of this model is 23.3332 and AIC is 3290.23.
+
+plot the forecsts using autoplot:
+
+```{r}
+autoplot(forecast(forecast.atm.3, 31))
+```
+
+
+```{r}
+ATM3_Forecast = forecast(forecast.atm.3, 31, level = 95)
+
+Forecast_ATM3 =data_frame(DATE = rep(max(atm$DATE) + 1:31),
+           ATM = rep("ATM1"),
+           Cash = as.numeric( ATM3_Forecast$mean))  
+```
+
+Therefore, the above plotted predictions appear reasonable based on the trends in recent dataset.
+
+
+The above data is forecasted predicted values of ATM 3 based on ATM 1 values.
+
+
+## ATM 4
+
+Analyse ATM 4 data distribution:
+
+```{r}
+autoplot(ATM4)+labs(title = "Cash withdrawl ATM4",
+       subtitle = "5/1/2009 - 4/30/2010",
+       x = "Date",y = "Cash") 
+```
+
+
+As we saw in ATM 3, there is considerable change in ATM 4 in first two months i.e.Jul'09, Oct'09 for sunday, monday,tuesday,wednesday,friday,saturday. But in this dataset, change in earlier data points is more prevalent compared data points at the later stages of the year. 
+
+
+I would now group the data by weekly.
+
+```{r}
+ATM4_Weekly = ts(ATM4, frequency = 7)
+
+ggtsdisplay(ATM4_Weekly)
+```
+
+
+ARIMA model:
+
+```{r}
+Model1_ATM4_Weekly =auto.arima(ATM4_Weekly,lambda=BoxCox.lambda(ATM4_Weekly))
+
+checkresiduals(Model1_ATM4_Weekly)
+```
+
+
+This gave ARIMA(3,0,2)(1,0,0) with non-zero mean. residual plot does not seem to be normal.
+
+Summarizing the model:
+
+```{r}
+summary(Model1_ATM4_Weekly)
+```
+
+rmse value of this model is 359.4022 and AIC is 2927.95
+
+plot the forecsts using autoplot:
+
+```{r}
+autoplot(forecast(Model1_ATM4_Weekly, 31, level = 95))
+```
+
+
+```{r}
+ATM4_Forecast = forecast(Model1_ATM4_Weekly, 31, level = 95)
+```
+
+Model 2 is an ETS(M,N,A) multiplicative errors, no trend and additive seasonality.
+
+```{r}
+Model2_ATM4_Weekly = ets(ATM4_Weekly)
+checkresiduals(Model2_ATM4_Weekly)
+```
+
+ACF plot shows that data is not white noise.
+
+
+
+```{r}
+summary(Model2_ATM4_Weekly)
+```
+
+rmse value of this model is 335.0327 and AIC is 6417.849
+
+Since rmse of ets model is better than arima, ets model is preferred for predicting future values.
+
+plot forecasted values:
+
+```{r}
+autoplot(forecast(Model2_ATM4_Weekly, 31, level = 95))
+
+```
+
+
+Therefore, the above plotted predictions appear reasonable based on the trends in recent dataset.
+
+
+### Writing forecasted dataset
+
+Now, let's plot all the predicted data points and write it to csv files.
+
+Writing our datapoints to csv files:
+
+```{r}
+ATM4_Forecast_ets = forecast(Model2_ATM4_Weekly, 31, level = 95)
+
+
+
+
+Forecast_ATM4 =data_frame(DATE = rep(max(atm$DATE) + 1:31),
+           ATM = rep("ATM4"),
+           Cash = as.numeric( ATM4_Forecast_ets$mean))
+
+
+
+ATM_Forecast = rbind(Forecast_ATM1,Forecast_ATM2,Forecast_ATM3,Forecast_ATM4)
+write.csv(ATM_Forecast,"/Users/priyashaji/Documents/cunymsds/Data 624/project 1/Forecast_ATM.csv")
+```
+
+
+
+
+
+## Part B{.tabset}
+
+Part B consists of a simple dataset of residential power usage for January 1998 until December 2013.  Your assignment is to model these data and a monthly forecast for 2014.  The data is given in a single file.The variable ‘KWH’ is power consumption in Kilowatt hours, the rest is straight forward. Add this to your existing files above.
+
+
+<strong>reading the dataset</strong>
+
+```{r}
+power <- readxl::read_excel('/Users/priyashaji/Documents/cunymsds/Data 624/project 1/ResidentialCustomerForecastLoad-624.xlsx') 
+
+power %>%
+  summary()
+```
+
+
+By seeing the summary of the dataset, we see that there are no major number of missing values.
+
+Now let's convert date column:
+
+```{r}
+power <- power %>%
+  rename(Date = `YYYY-MMM`) %>%
+  select(-CaseSequence) %>%
+  mutate(Date = as.Date(paste0('01-', Date), '%d-%Y-%b'))
+
+power %>%
+  DT::datatable()
+```
+
+
+Removing case sequence column for easier analysis.
+
+By analysong the data table, we come across two major issues: 
+
+1) Observation 151 has KWH value lower compared to all other values.
+
+2) Observation 129 has missing value for KWH
+
+Both the issues can be represented by the graph below:
+
+```{r}
+power %>%
+  ggplot(aes(Date, KWH)) +
+  geom_line() +
+  theme_bw()
+```
+
+
+
+For solving the first issue, we can multiply that number by 10 to make the magnitude of the number as per other dataset.
+
+Displaying the data for 2007
+
+```{r}
+power %>%
+  filter(format(Date, '%m') == '07')
+```
+
+
+For the second issue, as the KWH plot above seems seasonal plot, therefore we cannot have a missing value which would break that seasonality.So for missing value, we can fill it by the average of previous and next data value
+
+
+```{r}
+power %>%
+  slice(128:130)
+```
+
+
+
+```{r}
+power <- power %>%
+  mutate(KWH = ifelse(KWH == 770523, KWH * 10, KWH)) %>%
+  mutate(KWH = ifelse(is.na(KWH), (8037137+5101803)/2, KWH))
+
+power %>% 
+  summary()
+```
+
+
+```{r}
+power %>%
+  ggplot(aes(Date, KWH)) +
+  geom_line() +
+  theme_bw()
+```
+
+
+From the above plot, our data is seasonal.
+
+Now, let's split the dataset into train and test dataset
+
+```{r}
+train <-power$KWH %>%
+  ts(frequency=12, start=c(1998, 1),end=c(2012,12)) 
+test <- power$KWH %>%
+  ts(frequency=12, start=c(2013,1),end=c(2013,12)) 
+```
+
+
+Using `auto.arima()` to model this data:
+
+```{r}
+power.arima <- train %>% 
+  auto.arima(approximation=FALSE, stepwise=FALSE, lambda=BoxCox.lambda(train)) 
+```
+
+
+Check residulas and model ARIMA plots:
+
+```{r}
+power.arima %>%
+  checkresiduals()
+```
+
+As we see from the ACF plot above, all the lags or spikes lies within the blue dashed line range, which shows that this data is white noies. Also, from the residuals plot above, data distribution seems to be normal with residual mean around 0.
+
+```{r}
+summary(power.arima)
+```
+
+rmse value is 569034.6
+
+
+Now, let's plot the predictions of the test dataset
+
+
+```{r}
+power.arima %>%
+  forecast(32, level=c(0)) %>%
+  autoplot() +
+  autolayer(test)
+```
+
+
+As we see form the graph above, the red line shows prediction data points, which seems to be a strong fit.
+
+Now we will compare the predictions with testing set
+
+```{r}
+Power_Model1_Forecast = forecast(power.arima, 12, level = 95)
+```
+
+Now we will compare the accuracy of the forecst which will compare the forecast based on residuals and the testing data based on the forecast errors
+
+```{r}
+accuracy(Power_Model1_Forecast,test)
+```
+
+rmse value is 569034.6
+
+Model 2 is ets model
+
+
+```{r}
+Power_Model2 =ets(train,lambda=BoxCox.lambda(train))
+checkresiduals(Power_Model2)
+```
+
+
+
+residual plot loos normally distributed.
+
+summary of the model
+
+```{r}
+summary(Power_Model2)
+```
+
+rmse value is 581515.8.
+
+let's plot the forecasts:
+
+```{r}
+autoplot(forecast(Power_Model2, 12, level = 95))+autolayer(test,series = "Test Data")
+```
+
+
+
+```{r}
+Power_Model2_Forecast = forecast(Power_Model2, 12, level = 95)
+
+```
+
+
+Compairing the accuracy against test dataset
+
+```{r}
+accuracy(Power_Model2_Forecast,test)
+```
+
+rmse value is 581515.8 whereas rmse value of model 1 was 569034.6, therefore, i will choose model 1 since it had lower rmse score.
+
+
+
+Now, with our selected model, let's train the full dataset and make predictions:
+
+```{r}
+predictions <- power$KWH %>%
+  auto.arima(approximation=FALSE, stepwise=FALSE, lambda='auto') %>%
+  forecast(12, level=c(0))
+
+predictions %>%
+  autoplot() +
+  theme_bw() +
+  labs(x='', y='KWH')
+```
+
+
+
+
+The above forecasts of predictions seems resonable when we look at the past dataset, as the predictions also shows seasonnality.
+
+### Writing predictions to csv file
+
+Now, let's store our predictions in a csv file.
+
+```{r}
+future.dates <- power$Date %>%
+  tail(1) %>%
+  seq.Date(length=12, by='1 month')
+
+to.write <- data_frame(CaseSequence=924:935, `YYYY-MMMM`=future.dates, KWH=predictions$mean) 
+
+to.write %>%
+  write_csv('/Users/priyashaji/Documents/cunymsds/Data 624/project 1/Residential_predictions.csv')
+
+to.write %>%
+  DT::datatable()
+```
+
+
+
+## Part C {.tabset}
+
+Part C consists of two data sets.  These are simple 2 columns sets, however they have different time stamps.  Your optional assignment is to time-base sequence the data and aggregate based on hour (example of what this looks like, follows).  Note for multiple recordings within an hour, take the mean.  Then to determine if the data is stationary and can it be forecast.  If so, provide a week forward forecast and present results via Rpubs and .rmd and the forecast in an Excel readable file.   
+
+
+
+
+According to the question, our goal is to time-base sequence the data and aggregate based on hour.
+Therefore, I am going to combine the two given datasets.
+
+The data is rounded, group by and summarized.
+
+```{r message=FALSE, warning=FALSE}
+w1 = readxl::read_excel('/Users/priyashaji/Documents/cunymsds/Data 624/project 1/Waterflow_Pipe1.xlsx',col_types =c("date", "numeric"))
+w2 = readxl::read_excel('/Users/priyashaji/Documents/cunymsds/Data 624/project 1/Waterflow_Pipe2.xlsx',col_types =c("date", "numeric"))
+colnames(w1)= c("date_time","WaterFlow")
+colnames(w2)= c("Date_Time","WaterFlow")
+
+#Since the dataset needs to be aggregate based on hour, I will round data time column and separate that column based on hour.
+
+Waterdf= w1 %>% mutate(Date_Time = lubridate::round_date(date_time,"hour") ) %>% select(Date_Time,WaterFlow) %>% bind_rows(w2) %>% group_by(Date_Time) %>% summarize(WaterFlowF = mean(WaterFlow, na.rm = T))
+
+```
+
+
+Now we will do analysis on `waterflow` dataset which is a combination of `Waterflow_Pipe1.xlsx` and `Waterflow_Pipe2.xlsx`.
+
+Convert the dataset to timeseries:
+
+
+```{r}
+Water_ts = ts(Waterdf$WaterFlowF,frequency = 24)
+```
+
+Plot the timeseries:
+
+```{r}
+autoplot(Water_ts)
+```
+
+
+Plot ACF and residuals of timeseries:
+
+
+```{r}
+ggtsdisplay(Water_ts)
+```
+
+By seeing the graph, dataset looks non-stationarized. ACF plot shows that data is not white noise. It shows that correlations are not random.
+
+Stationarizing the dataset using boc cox method and using auto.arima() for forecasting data points:
+
+```{r}
+Water_Model1 =auto.arima(Water_ts,lambda=BoxCox.lambda(Water_ts),stepwise = FALSE)
+
+checkresiduals(Water_Model1)
+```
+
+Above plot looks stationarized. As we see, our ARIMA(0,1,1) model, ACF plot is not white noise and the residual plot follows normality with mean centered around 0.
+
+Summary of our model ARIMA(0,0,1)
+
+```{r}
+summary(Water_Model1)
+```
+
+
+`Forecast()` function on our model 1:
+
+```{r}
+Water_Model1_Forecast = forecast(Water_Model1, 168, level=95)
+
+autoplot(forecast(Water_Model1, 168, level = 95))
+```
+
+
+Modeling our stationarized data using `ets()` 
+
+```{r}
+Water_Model2 = ets(Water_ts,lambda=BoxCox.lambda(Water_ts))
+
+checkresiduals(Water_Model2)
+```
+
+The ACF plot does not have whote noise and the residual plot follows normality with mean centered around 0
+
+
+Summarizing our dataset:
+
+```{r}
+summary(Water_Model2)
+```
+
+Here, the rmse value for this model is 17.03221 which is much higher compared to ARIMA(0,0,1) model.
+
+Plot the forecasted model
+
+
+```{r}
+autoplot(forecast(Water_Model2, 168, level = 95))
+```
+
+`Forecast()` function on our model 2:
+
+
+```{r}
+Water_Model2_Forecast = forecast(Water_Model2, 168, level=95) 
+```
+
+
+Therefore, I will go with ARIMA(0,1,1) as it has lower RMSE.
+
+### Writing predictions to csv file
+
+Writing our predicted data pints to csv file:
+
+```{r}
+Water_csv= data_frame(Date_Time = max(Waterdf$Date_Time) + lubridate::hours(1:168),
+           WaterFlowF = as.numeric( Water_Model1_Forecast$mean) )
+
+write.csv(Water_csv,"/Users/priyashaji/Documents/cunymsds/Data 624/project 1/pipe_predictions.csv")
+```
+
+
