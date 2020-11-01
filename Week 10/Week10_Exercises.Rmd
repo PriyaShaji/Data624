@@ -1,0 +1,487 @@
+---
+title: "DATA 624 Homework 7"
+author: "Priya Shaji"
+date: "10/28/2020"
+output:
+  html_document:
+    code_folding: hide
+---
+
+## Forecasting Principles and Practice
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE}
+library(caret)
+library(pls)
+library(tidyverse)
+library(AppliedPredictiveModeling)
+library(corrplot)
+library(psych)
+library(e1071)
+```
+
+
+#### 6.2
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 10/Screen Shot 2020-10-28 at 7.44.53 PM.png")
+```
+
+<strong>a.</strong>
+
+Load the data
+
+```{r}
+data(permeability)
+```
+
+Summarizing data
+
+```{r}
+summary(permeability)
+```
+
+
+The matrix fingerprints contains the 1,107 binary molecular predictors for the 165 compounds, while permeability contains permeability response.
+
+
+<strong>b.</strong>
+
+As suggested in the question, we will use `nearZeroVar` function as the nearZeroVar function can be useful to remove sparse and unbalanced variables.
+
+
+```{r}
+fingerprints <- as.data.frame(fingerprints)
+print(paste('Total predictors:', ncol(fingerprints)))
+```
+
+
+As we see, total no. of predictors are: 1107
+
+```{r}
+print(paste('Non-Sparse predictors:', ncol(fingerprints[, -nearZeroVar(fingerprints)])))
+```
+
+
+by using `nearZeroVar` non-sparse predictors are removed. So, we have 338 predictors which are not sparsed and not unbalanced.
+
+
+<strong>c.</strong>
+
+Pre process the data with nearZeroVar which removes non-sparse and unbalanced predictors.
+
+
+```{r}
+
+fingerprints <- fingerprints[, -nearZeroVar(fingerprints)]
+```
+
+
+Split the dataset into test and training purposes
+
+
+```{r}
+
+set.seed(0)
+smp_size <- floor(0.8 * nrow(fingerprints))
+train_ind <- sample(seq_len(nrow(fingerprints)), size = smp_size)
+
+Xtrain <- fingerprints[train_ind, ]
+Xtest <- fingerprints[-train_ind, ]
+
+ytrain <- permeability[train_ind, ]
+ytest <- permeability[-train_ind, ]
+```
+
+
+
+Tuning a PLS model
+
+
+```{r}
+#model
+set.seed(0)
+plsTune <- train(Xtrain, 
+                 ytrain,
+                 method = "pls",
+                 tuneLength = 30,
+                 preProc = c("center", "scale"),
+                 trControl =  trainControl(method = 'cv', 10))
+```
+
+
+
+Let's plot the `scree plot` of the model
+
+```{r}
+plot(plsTune)
+```
+
+
+Number of latent variables that are optimal
+
+
+```{r}
+(lv <- which.min(plsTune$results$RMSE))
+```
+
+
+As we see, according to the scree plot, the ideal amount of latent variables is 7
+
+Now, let's find the corresponding resampled estimate of R2
+
+```{r}
+print(plsTune$results[lv,3])
+```
+
+As we see, the R-squared corresponding to 7 latent variables is 0.4599706.
+
+<strong>d.</strong>
+
+Predicting response of test set and calculating test set estimate of R2
+
+```{r}
+pls_pred <- predict(plsTune, Xtest)
+plot(pls_pred, ytest, main=paste("Predicted vs Observed Permeability, PLS Model with", lv, "Components"), xlab="Predicted", ylab="Actual")
+```
+
+
+
+```{r}
+(cor(ytest, pls_pred) ^ 2)
+```
+
+Therefore, R-squared with PLS model for the test set is 0.5366691
+
+<strong>e.</strong>
+
+There are various models discussed in this chapter which can be used analyze which model has better predictive response.
+
+Other models discussed in this chapter are: penalized regression models, Ridge regression and elastic net models
+
+
+<strong>Ridge regression method</strong>
+
+```{r message=FALSE, warning=FALSE}
+set.seed(0)
+ridgeGrid <- data.frame(.lambda = seq(0, .1, length = 20))
+ridgeTune <- train(Xtrain, 
+                 ytrain,
+                 method = "ridge",
+                 tuneGrid = ridgeGrid,
+                 trControl = trainControl(method = 'cv', 10),
+                 preProc = c("center", "scale"))
+```
+
+
+```{r}
+ridge_pred <- predict(ridgeTune, Xtest)
+print(cor(ytest, ridge_pred) ^ 2)
+```
+
+
+As we see, R-squared with Ridge regression for the test set is 0.4191791
+
+
+<strong>Elastic Net method</strong>
+
+```{r message=FALSE, warning=FALSE}
+set.seed(0)
+enetGrid <- expand.grid(lambda = c(0, 0.01, .1), fraction = seq(.05, 1, length = 20))
+enetTune <- train(Xtrain, 
+                 ytrain,
+                 method = "enet",
+                 tuneGrid = enetGrid,
+                 trControl = trainControl(method = 'cv', 10),
+                 preProc = c("center", "scale"))
+```
+
+
+```{r}
+enet_pred <- predict(enetTune, Xtest)
+print(cor(ytest, enet_pred) ^ 2)
+```
+
+
+R-squared with Elastic Net regression for the test set is 0.4863764.
+
+<strong>Lasso Regression method</strong>
+
+```{r}
+set.seed(1)
+lassoFit <- train(x=Xtrain,
+                  y=ytrain,
+                  method='lasso',
+                  metric='Rsquared',
+                  tuneGrid=data.frame(.fraction = seq(0, 0.5, by=0.05)),
+                  trControl=trainControl(method='cv',10),
+                  preProcess=c('center','scale')
+                  )
+```
+
+
+```{r}
+lasso_pred <- predict(lassoFit, Xtest)
+print(cor(ytest, lasso_pred) ^ 2)
+```
+
+R-squared with Lasso regression for the test set is 0.5600347
+
+
+```{r}
+plot(lassoFit)
+```
+
+
+
+Therefore, from the three models above, lasso model has the highest R-squared value compared to elastic net, ridge regression and penalized method.
+
+Now, let's do a summary of all the models
+
+```{r}
+resamp <- resamples(list(PLS=plsTune, Ridge=ridgeTune, Lasso=lassoFit, enet=enetTune))
+(resamp.s <- summary(resamp))
+```
+
+
+As we see here, lasso method has the highest R-squared value.
+
+Now, lets evaluate models based on test set
+
+```{r}
+multiResample <- function(models, newdata, obs){
+  res = list()
+  methods = c()
+  i = 1
+  for (model in models){
+    pred <- predict(model, newdata=newdata)
+    metrics <- postResample(pred=pred, obs=obs)
+    res[[i]] <- metrics
+    methods[[i]] <- model$method
+    i <- 1 + i
+  }
+  names(res) <- methods
+  return(res)
+}
+
+models <- list(plsTune, ridgeTune, lassoFit, enetTune)
+(resampleResult <- multiResample(models, Xtest, ytest))
+```
+
+As we see from results above, evaluation on test set tells that lasso method has highest R-squared value and also lowest rmse value.
+
+This result matches with our 10-fold cross validatios, which says that lasso model is a good predictive method compared to other predictive methods.
+
+
+<strong>f.</strong>
+
+
+By analyzing performance of all models used, I would not recommend to replace any of the models with permeability laboratory experiment.
+
+Since all models have MAE between 6 and 8. Which means that these model predictions on an average are plus/minus 6 to 8 off.
+
+
+For confirming, let's analyze target variable `permeability`
+
+```{r}
+hist(permeability)
+```
+
+
+
+As we can see, most of the permeability are between 0 to 10 range. Therefore, model's accuracy is not good enough for lab test.
+
+
+#### 6.3
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 10/Screen Shot 2020-10-29 at 8.42.43 PM.png")
+```
+
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 10/Screen Shot 2020-10-30 at 5.54.40 PM.png")
+```
+
+
+<strong>a.</strong>
+
+Load the data
+
+```{r}
+data(ChemicalManufacturingProcess)
+```
+
+
+The matrix processPredictors contains the 57 predictors (12 describing the input biological material and 45 describing the process predictors) for the 176 manufacturing runs. yield contains the percent yield for each run.
+
+<strong>b.</strong>
+
+We will use `nearZeroVar` function as the nearZeroVar function can be useful to remove sparse and unbalanced variables using two methods:
+
+
+```{r}
+cmp <- ChemicalManufacturingProcess[, -nearZeroVar(ChemicalManufacturingProcess)]
+print(paste('Total predictors:', ncol(ChemicalManufacturingProcess)))
+```
+
+As we see, total no. of predictors are: 58
+
+```{r}
+print(paste('Non-Sparse predictors:', ncol(ChemicalManufacturingProcess[, -nearZeroVar(ChemicalManufacturingProcess)])))
+```
+
+by using `nearZeroVar` non-sparse predictors are removed. So, we have 57 predictors which are not sparsed and not unbalanced.
+
+
+Let's use `kNN imputation` function to impute missing values
+
+
+```{r}
+cmp <- preProcess(as.data.frame(cmp), method = "knnImpute", k = 10)$data
+```
+
+
+<strong>c.</strong>
+
+Split the dataset into test and training set.
+
+
+```{r}
+# test train split
+set.seed(0)
+smp_size <- floor(0.8 * nrow(cmp))
+train_ind <- sample(seq_len(nrow(cmp)), size = smp_size)
+
+Xtrain <- cmp[train_ind, -1]
+Xtest <- cmp[-train_ind, -1]
+
+ytrain <- cmp[train_ind, 1]
+ytest <- cmp[-train_ind, 1]
+```
+
+
+Now, let's analyze the dataset for any skewness in the data points
+
+
+```{r}
+multi.hist(Xtrain, main = '', bcol = 'blue')
+```
+
+
+As we see the histograms of training data features, we see that these features have skewed distribution.
+
+Let's confirm this using `skewness` function
+
+```{r}
+head(sort(apply(Xtrain, 2, skewness)), 8)
+tail(sort(apply(Xtrain, 2, skewness)), 2)
+```
+
+
+The skewness function confirms the skewness in the features of this dataset. The data will centered and scaled to address this.
+
+
+Tuning the data using pls method
+
+```{r}
+set.seed(0)
+plsTune <- train(Xtrain, 
+                 ytrain,
+                 method = "pls",
+                 tuneLength = 30,
+                 preProc = c("center", "scale"),
+                 trControl =  trainControl(method = 'cv', 10))
+```
+
+
+Plot the pls model
+
+```{r}
+plot(plsTune)
+```
+
+optimal value of latent variable is:
+
+```{r}
+lv <- which.min(plsTune$results$RMSE)
+paste(lv)
+```
+
+
+According to the scree plot, the optimal value of latent variables is 2
+
+
+R-sqaured value of training dataset:
+
+```{r}
+print( plsTune$results[lv,3])
+```
+
+
+Train set R-squared with PLS model having 2 latent variables is: 0.5411331
+
+<strong>d.</strong>
+
+Predicting response on test set:
+
+```{r}
+pls_pred <- predict(plsTune, Xtest)
+print( cor(ytest, pls_pred) ^ 2)
+```
+
+
+Test set R-squared with PLS model is 0.4985139
+
+As we compare, test set R-squared value is lower than training set r-squared value.
+
+<strong>e.</strong>
+
+Let's use `varImp` to analyze which predictors are most important:
+
+```{r}
+plot(varImp(plsTune), top = 10)
+```
+
+
+- As we see from the graph above, most important predictors are ManufacturingProcess09,        ManufacturingProcess13, ManufacturingProcess32, ManufacturingProcess17, and                  ManufacturingProcess36. 
+
+- Manufacturing process features have more importance compared to biological process.
+
+<strong>f.</strong>
+
+Let's explore relationship between each of the top predictors and the response using correlation plot
+
+```{r}
+cmp %>% 
+  select(c('ManufacturingProcess09','ManufacturingProcess13','ManufacturingProcess32','ManufacturingProcess17','ManufacturingProcess36',
+           'BiologicalMaterial02', 'BiologicalMaterial03', 'BiologicalMaterial06', 'ManufacturingProcess06', 'BiologicalMaterial04', 'Yield')) %>%
+  cor() %>%
+  corrplot(method = 'circle')
+
+```
+
+
+As we see from the correlation plot above, relation between our top 5 predictors and yield are as follows:
+
+The relationship between 
+
+- ManufacturingProcess09 and yield is moderate and positive
+
+- ManufacturingProcess13 and yield is strong and negative
+
+- ManufacturingProcess32 and yield is moderate and positive
+
+- ManufacturingProcess17 and yield is moderate and negative
+
+- ManufacturingProcess36 and yield is moderate and negative
+
+
+
+Also, as we see from the correlation plot, there is a significant correlation between predictors and this information can be useful for improving yield.
+
+By using this analyses, processes having negative correlations with yield can be reduced and processes with positive correlations can be enhanced.
+
+
