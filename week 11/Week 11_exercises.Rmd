@@ -1,0 +1,439 @@
+---
+title: "DATA 624 Homework 8"
+author: "Priya Shaji"
+date: "10/28/2020"
+output:
+  html_document:
+    code_folding: hide
+---
+
+### Load required packages{.tabset}
+
+```{r message=FALSE, warning=FALSE}
+library(kernlab)
+library(mlbench)
+library(caret)
+library(lattice)
+library(ggplot2)
+```
+
+#### 7.2
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 11/Screen Shot 2020-11-03 at 5.09.19 PM.png")
+```
+
+- After loading the dataset, convert the 'x' data from a matrix to a data frame
+
+
+```{r}
+set.seed(200)
+trainingData <- mlbench.friedman1(200, sd = 1)
+## We convert the 'x' data from a matrix to a data frame
+## One reason is that this will give the columns names.
+trainingData$x <- data.frame(trainingData$x)
+## Look at the data using
+featurePlot(trainingData$x, trainingData$y)
+```
+
+- creating a list with a vector 'y' and a matrix of predictors 'x'. Also simulating a large test set to estimate the true error rate with good precision:
+
+```{r}
+## or other methods.
+## This creates a list with a vector 'y' and a matrix
+## of predictors 'x'. Also simulate a large test set to
+## estimate the true error rate with good precision:
+testData <- mlbench.friedman1(5000, sd = 1)
+testData$x <- data.frame(testData$x)
+```
+
+
+Tune several models on these data. For example:
+
+Tuning Knn Model:
+
+```{r}
+knnModel <- train(x = trainingData$x,
+                  y = trainingData$y,
+                  method = "knn",
+                  preProc = c("center", "scale"),
+                  tuneLength = 10)
+knnModel
+```
+
+- Using function 'postResample' to get the test set perforamnce values
+
+```{r}
+knnPred <- predict(knnModel, newdata = testData$x)
+
+## The function 'postResample' can be used to get the test set
+## perforamnce values
+postResample(pred = knnPred, obs = testData$y)
+```
+
+<strong>Which models appear to give the best performance? Does MARS select the informative predictors (those named X1-X5)?</strong>
+
+<strong> Answer</strong>
+
+Now, we are going to build different models whose datasets are scaled and centered for model building.
+
+<strong>SVM</strong>
+
+Tuning a SVM model with method as `svmRadial` 
+
+```{r}
+svmRadialModel <- train(x = trainingData$x,
+                        y = trainingData$y,
+                        method = "svmRadial",
+                        tuneLength=10,
+                        preProc = c("center", "scale"))
+svmRadialModel
+```
+
+
+Function used for resampling is `postResample`. After a model is tuned, the test set performance is calculated.
+
+
+```{r}
+svmRadialPred <- predict(svmRadialModel, newdata = testData$x)
+postResample(pred = svmRadialPred, obs = testData$y)
+```
+
+RMSE for SVM is 2.0864652.
+
+<strong>Averaged Neural Networks</strong>
+
+Now, let's tune the model using `averaged neural networks` over decay and number of hidden units.
+
+```{r message=FALSE, warning=FALSE}
+nnetGrid <- expand.grid(.decay=c(0, 0.01, 0.1, 0.5, 0.9),
+                        .size=c(1, 10, 15, 20),
+                        .bag=FALSE)
+
+nnetModel <- train(x = trainingData$x,
+                   y = trainingData$y,
+                   method = "avNNet",
+                   tuneGrid = nnetGrid,
+                   preProc = c("center", "scale"),
+                   trace=FALSE,
+                   linout=TRUE,
+                   maxit=500)
+```
+
+Displaying model results:
+
+```{r}
+nnetModel
+```
+
+Function used for resampling is `postResample`. After a model is tuned, the test set performance is calculated.
+
+```{r}
+nnetPred <- predict(nnetModel, newdata = testData$x)
+postResample(pred = nnetPred, obs = testData$y)
+```
+
+RMSE for averaged neural networks is 1.894755.
+
+<strong>Mars</strong>
+
+Using `Mars` method to tune our model by earth method:
+
+```{r}
+marsGrid <- expand.grid(.degree=1:2,
+                        .nprune=2:20)
+
+marsModel <- train(x = trainingData$x,
+                   y = trainingData$y,
+                   method = "earth",
+                   tuneGrid = marsGrid,
+                   preProc = c("center", "scale"))
+```
+
+
+Displaying results for model:
+
+
+```{r}
+marsModel
+```
+
+Using function `postResample` to resample our model:
+
+```{r}
+marsPred <- predict(marsModel, newdata = testData$x)
+postResample(pred = marsPred, obs = testData$y)
+```
+
+RMSE for `MARS` model is 1.2779993.
+
+As per the RMSE of above three models, MARS model has lowest RMSE of 1.277 and it fits best compared to other two models.
+
+Let's display informative variables picked by MARS model using `varImp` since it has best fit and also lowest RMSE.
+
+
+```{r}
+varImp(marsModel)
+```
+
+
+the MARS model picked the most informative variables, X1 ~ X5.
+
+
+#### 7.5
+
+```{r echo=FALSE}
+knitr::include_graphics("/Users/priyashaji/Documents/cunymsds/Data 624/week 11/Screen Shot 2020-11-05 at 7.41.30 PM.png")
+```
+
+Before beginning with analyses, let's impute the missing data.
+
+In the `ChemicalManufacturingProcess` dataset, missing data points are imputed using the bagImpute method.
+
+```{r}
+
+library(AppliedPredictiveModeling)
+data(ChemicalManufacturingProcess)
+# Impute missing values using `bagImpulte`
+(cmpImpute <- preProcess(ChemicalManufacturingProcess[,-c(1)], method=c('bagImpute')))
+
+```
+
+Splitting the dataset in to test and train
+
+```{r}
+
+cmp <- predict(cmpImpute, ChemicalManufacturingProcess[,-c(1)])
+
+# Train/test plitting data, 20% testing
+set.seed(1)
+trainRow <- createDataPartition(ChemicalManufacturingProcess$Yield, p=0.8, list=FALSE)
+X.train <- cmp[trainRow, ]
+y.train <- ChemicalManufacturingProcess$Yield[trainRow]
+X.test <- cmp[-trainRow, ]
+y.test <- ChemicalManufacturingProcess$Yield[-trainRow]
+```
+
+
+In this question, I will train non-linear models and display their resamlped data together as a list.
+
+Now, lets train KNN model
+
+<strong>KNN</strong>
+
+Tuning KNN model:
+
+```{r message=FALSE, warning=FALSE}
+set.seed(1)
+knnModel <- train(x = X.train,
+                  y = y.train,
+                  method = "knn",
+                  preProc = c("center", "scale"),
+                  tuneLength = 10)
+```
+
+Displaying results for KNN model
+
+```{r}
+knnModel
+```
+
+
+<strong>averaged neural networks</strong>
+
+
+Tuning averaged neural networks model:
+
+
+```{r message=FALSE, warning=FALSE}
+nnetGrid <- expand.grid(.decay=c(0, 0.01, 0.1),
+                        .size=c(1, 5, 10),
+                        .bag=FALSE)
+set.seed(1)
+nnetModel <- train(x = X.train,
+                   y = y.train,
+                   method = "avNNet",
+                   tuneGrid = nnetGrid,
+                   preProc = c("center", "scale"),
+                   trace=FALSE,
+                   linout=TRUE,
+                   maxit=500)
+```
+
+
+Displaying results for averaged neural networks model:
+
+
+```{r}
+nnetModel
+```
+
+
+<strong>MARS</strong>
+
+Tuning MARS model:
+
+```{r message=FALSE, warning=FALSE}
+marsGrid <- expand.grid(.degree=1:2,
+                        .nprune=2:10)
+set.seed(1)
+marsModel <- train(x = X.train,
+                   y = y.train,
+                   method = "earth",
+                   tuneGrid = marsGrid,
+                   preProc = c("center", "scale"))
+```
+
+
+Displaying results for MARS model
+
+
+```{r}
+marsModel
+```
+
+
+<strong>SVM</strong>
+
+Tuning SVM model using radial bias method:
+
+
+```{r message=FALSE, warning=FALSE}
+set.seed(1)
+svmRadialModel <- train(x = X.train,
+                        y = y.train,
+                        method = "svmRadial",
+                        tuneLength=10,
+                        preProc = c("center", "scale"))
+```
+
+
+Displaying results for SVM model
+
+
+```{r}
+svmRadialModel
+```
+
+
+<strong>(a)</strong>
+
+
+The resampling performance of all the models are calculated below:
+
+```{r}
+resamp <- resamples(list(KNN=knnModel, NNet=nnetModel, MARS=marsModel, SVM=svmRadialModel))
+summary(resamp)
+```
+
+
+By seeing the above RMSE, SVM model has lowest RMSE compared to others. Therefore, SVM model is optimal.
+
+Now we will calculate test set performance:
+
+```{r}
+testPerf <- function(models, testData, testTarget) {
+  method <- c()
+  res <- data.frame()
+  for(model in models){
+    method <- c(method, model$method)
+    pred <- predict(model, newdata=testData)
+    res <- rbind(res, t(postResample(pred=pred, obs=testTarget)))
+  }
+  row.names(res) <- method
+  return(res)
+}
+
+models <- list(knnModel, nnetModel, marsModel, svmRadialModel)
+
+performance <- testPerf(models, X.test, y.test)
+performance
+```
+
+Test set performance models RMSE is lowest for SVM model.
+
+Displaying SVM models results:
+
+```{r}
+(svmModel <- svmRadialModel$finalModel)
+```
+
+
+<strong>b</strong>
+
+
+For fitted neural network model, there is no direct method to caculate most important predictor, the following list is computed from SVM model.
+
+The `varImp` function with which we get the important variables of a model, it evaluates variable importance by fitting a loess smoother between the outcome and the predictors giving us R^2 metric for variable importance.
+
+
+```{r}
+topFeatures <- varImp(svmRadialModel)
+topFeatures
+```
+
+As we see from the above results, out of first 10 predictors, 6 predictors are ManufacturingProcess predictors.
+
+ManufacturingProcess32 is top ranked predictor. Therefore, it seems that ManufacturingProcess are more important predictors compares to BiologicalMaterial.
+
+
+<strong>c</strong>
+
+- Exploring relationship between tp predictors and response for predictors. 
+
+- Extract the support vectors determined by the model and sort the top features       determined by loess R^2
+
+```{r}
+
+vectorIndex <- SVindex(svmModel)
+supportVectorX <- X.train[vectorIndex,]
+supportVectorY <- y.train[vectorIndex]
+
+
+topFeatures <- topFeatures$importance
+topFeatures$predictor <- row.names(topFeatures)
+topFeatures <- topFeatures[order(topFeatures$Overall, decreasing = T), ]
+topFeatures <- row.names(topFeatures)
+
+
+for (i in 1:10){
+  plot(x=supportVectorX[, topFeatures[i]], y=supportVectorY, 
+       xlab=topFeatures[i], ylab='Yield')
+}
+```
+
+
+As we see, above scatter plots show relationships between predictors of the SVM model and the response variable Yield
+.
+
+- As we know there are 122 support vectors in the SVM model, I extract those and plotting these vectors with the top 10 variables ranked by the loess R^2 method.
+
+- We can infer from the plots, that top features have significant relationship with the target variable.
+
+- In ManufacturingProcess32 plot we can see that, as the variable value increases,Yield also increases
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
